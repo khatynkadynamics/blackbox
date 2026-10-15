@@ -1,0 +1,1371 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>HACKME — Blackbox CPU Simulator</title>
+  <style>
+    :root{
+      --bg:#050a07;
+      --fg:#c7ffbf;
+      --fg2:#88ff7d;
+      --dim2:#2ce83a;
+      --grid2:rgba(70,255,130,.14);
+      --warn:#ffe66a;
+      --bad:#ff6a6a;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
+      --radius:12px;
+      --glow: 0 0 16px rgba(80,255,120,.16), 0 0 40px rgba(80,255,120,.08);
+    }
+
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    html, body{ overflow:auto; }
+
+    body{
+      margin:0;
+      font-family: var(--mono);
+      color:var(--fg);
+      background:
+        radial-gradient(1200px 900px at 20% 15%, rgba(70,255,130,.12), transparent 55%),
+        radial-gradient(900px 700px at 85% 70%, rgba(70,255,130,.10), transparent 60%),
+        linear-gradient(180deg, var(--bg), #020603 70%, #010302);
+      overflow-x:hidden;
+    }
+
+    /* CRT scan + vignette */
+    body::before{
+      content:"";
+      position:fixed; inset:0;
+      pointer-events:none;
+      background:
+        repeating-linear-gradient(
+          180deg,
+          rgba(120,255,160,.045) 0px,
+          rgba(120,255,160,.045) 1px,
+          rgba(0,0,0,.00) 2px,
+          rgba(0,0,0,.00) 4px
+        );
+      mix-blend-mode: overlay;
+      opacity:.55;
+      z-index:2;
+    }
+    body::after{
+      content:"";
+      position:fixed; inset:-1px;
+      pointer-events:none;
+      background:
+        radial-gradient(1200px 900px at 50% 40%, transparent 55%, rgba(0,0,0,.65) 100%),
+        radial-gradient(900px 700px at 50% 50%, rgba(0,0,0,.0) 30%, rgba(0,0,0,.35) 100%);
+      z-index:3;
+    }
+
+    .app{
+      position:relative;
+      z-index:1;
+      max-width:1180px;
+      margin:0 auto;
+      padding:14px 12px 18px;
+      height:100%;
+
+      gap:10px;
+      min-height:0;
+    }
+
+    .topbar{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding:10px 10px;
+      border:1px solid var(--grid2);
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, rgba(10,28,18,.82), rgba(5,12,8,.75));
+      box-shadow: var(--glow);
+      backdrop-filter: blur(4px);
+    }
+
+    .brand{ display:flex; align-items:center; gap:10px; min-width: 320px; }
+    .logo{
+      width:28px; height:28px;
+      border-radius:10px;
+      border:1px solid rgba(120,255,160,.35);
+      background:
+        radial-gradient(16px 16px at 30% 30%, rgba(120,255,160,.35), transparent 70%),
+        linear-gradient(180deg, rgba(20,60,34,.70), rgba(6,18,10,.55));
+      box-shadow: 0 0 0 1px rgba(70,255,130,.10) inset, 0 0 16px rgba(70,255,130,.10);
+      position:relative;
+      flex:0 0 auto;
+    }
+    .logo::before{ content:""; position:absolute; inset:6px; border-radius:7px; border:1px dashed rgba(120,255,160,.35); opacity:.9; }
+    .logo::after{
+      content:"H";
+      position:absolute; inset:0;
+      display:grid; place-items:center;
+      font-weight:700;
+      letter-spacing:.08em;
+      color: rgba(190,255,210,.90);
+      text-shadow: 0 0 12px rgba(90,255,130,.22);
+      font-size:14px;
+    }
+
+    .brandText{ display:flex; flex-direction:column; gap:2px; }
+    .brand h1{
+      margin:0;
+      font-size:16px;
+      letter-spacing:.22em;
+      text-transform:uppercase;
+      color:var(--fg2);
+      text-shadow: 0 0 12px rgba(90,255,130,.22);
+      line-height:1.1;
+    }
+    .brand .sub{ font-size:11px; color:rgba(180,255,205,.72); letter-spacing:.08em; white-space:nowrap; line-height:1.1; }
+    .brand .cred{ font-size:10px; color:rgba(170,255,195,.60); letter-spacing:.08em; line-height:1.1; }
+    .brand .cred a{
+      color: rgba(190,255,210,.85);
+      text-decoration:none;
+      border-bottom:1px dotted rgba(120,255,160,.35);
+    }
+    .brand .cred a:hover{ color: var(--fg2); border-bottom-color: rgba(120,255,160,.65); }
+
+    .status{ display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; align-items:center; }
+    .pill{
+      border:1px solid var(--grid2);
+      background: rgba(0,0,0,.22);
+      padding:6px 8px;
+      border-radius:999px;
+      font-size:11px;
+      letter-spacing:.04em;
+      display:flex; gap:8px; align-items:center;
+      box-shadow: 0 0 0 1px rgba(70,255,130,.06) inset;
+      white-space:nowrap;
+    }
+    .dot{ width:8px;height:8px;border-radius:50%; background: var(--dim2); box-shadow: 0 0 10px rgba(70,255,130,.6); }
+    .dot.warn{ background: var(--warn); box-shadow: 0 0 10px rgba(255,230,106,.55); }
+
+    .grid{
+	  margin-top:10px;
+      display:grid;
+      grid-template-columns: 1.28fr .72fr;
+      gap:10px;
+      min-height:0;
+      flex:1;
+    }
+    @media (max-width: 980px){
+      html, body{ overflow:auto; }
+      .grid{ grid-template-columns:1fr; }
+    }
+
+    .panel{
+      border:1px solid var(--grid2);
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, rgba(7,17,12,.86), rgba(4,10,7,.78));
+      box-shadow: var(--glow);
+      overflow:hidden;
+      position:relative;
+      min-height:0;
+    }
+    .panel::before{
+      content:"";
+      position:absolute; inset:0;
+      background:
+        linear-gradient(90deg, transparent 0, rgba(120,255,160,.06) 50%, transparent 100%),
+        repeating-linear-gradient(90deg, transparent 0, transparent 22px, rgba(70,255,130,.08) 23px, transparent 24px),
+        repeating-linear-gradient(0deg, transparent 0, transparent 22px, rgba(70,255,130,.07) 23px, transparent 24px);
+      opacity:.28;
+      pointer-events:none;
+    }
+    .panel header{
+      position:relative;
+      z-index:1;
+      padding:10px 10px 8px;
+      border-bottom:1px solid rgba(70,255,130,.12);
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+    }
+    .panel header h2{
+      margin:0;
+      font-size:11px;
+      letter-spacing:.26em;
+      text-transform:uppercase;
+      color:rgba(200,255,210,.88);
+      white-space:nowrap;
+    }
+    .panel header .meta{
+      font-size:10px;
+      color:rgba(170,255,195,.62);
+      letter-spacing:.1em;
+      white-space:nowrap;
+    }
+    .panel .body{
+      position:relative;
+      z-index:1;
+      padding:10px;
+      min-height:0;
+      height: calc(100% - 40px);
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+
+    .btn{
+      cursor:pointer;
+      border:1px solid rgba(70,255,130,.30);
+      background: linear-gradient(180deg, rgba(20,60,34,.65), rgba(6,18,10,.55));
+      color:var(--fg);
+      padding:8px 10px;
+      border-radius:10px;
+      font-family: var(--mono);
+      letter-spacing:.12em;
+      text-transform:uppercase;
+      font-size:11px;
+      box-shadow: 0 0 0 1px rgba(70,255,130,.08) inset, 0 8px 24px rgba(0,0,0,.35);
+      transition: transform .08s ease, border-color .15s ease, filter .15s ease;
+      user-select:none;
+      white-space:nowrap;
+    }
+    .btn:hover{ border-color: rgba(120,255,160,.55); filter: brightness(1.06); }
+    .btn:active{ transform: translateY(1px); }
+    .btn.secondary{ background: rgba(0,0,0,.18); border-color: rgba(70,255,130,.18); color: rgba(200,255,215,.86); }
+    .btn.danger{ border-color: rgba(255,106,106,.35); color: rgba(255,200,200,.9); }
+
+    input[type="text"], input[type="number"], textarea, select{
+      width:100%;
+      background: rgba(0,0,0,.28);
+      border:1px solid rgba(70,255,130,.20);
+      color:var(--fg);
+      border-radius:10px;
+      padding:8px 10px;
+      outline:none;
+      font-family: var(--mono);
+      letter-spacing:.08em;
+      box-shadow: 0 0 0 1px rgba(70,255,130,.06) inset;
+      font-size:11px;
+      appearance:none;
+      -webkit-appearance:none;
+    }
+    select{
+      background-image:
+        linear-gradient(45deg, transparent 50%, rgba(190,255,210,.75) 50%),
+        linear-gradient(135deg, rgba(190,255,210,.75) 50%, transparent 50%),
+        linear-gradient(180deg, rgba(0,0,0,.0), rgba(0,0,0,.0));
+      background-position:
+        calc(100% - 16px) calc(50% - 3px),
+        calc(100% - 10px) calc(50% - 3px),
+        0 0;
+      background-size: 6px 6px, 6px 6px, 100% 100%;
+      background-repeat:no-repeat;
+      padding-right: 28px;
+    }
+    select option{
+      background: #06120c;
+      color: var(--fg);
+    }
+
+    input:focus, textarea:focus, select:focus{
+      border-color: rgba(120,255,160,.55);
+      box-shadow: 0 0 0 2px rgba(90,255,130,.12), 0 0 26px rgba(90,255,130,.12);
+    }
+
+    label{
+      font-size:10px;
+      letter-spacing:.22em;
+      text-transform:uppercase;
+      color: rgba(200,255,215,.72);
+    }
+    .field{ display:grid; gap:6px; }
+
+    .row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .row.grid3{ display:grid; grid-template-columns: 1.2fr 1.2fr .8fr; gap:8px; }
+    .row.grid4{ display:grid; grid-template-columns: 1.2fr 1fr 1fr .9fr; gap:8px; }
+    @media (max-width: 860px){
+      .row.grid4{ grid-template-columns:1fr 1fr; }
+    }
+    @media (max-width: 560px){
+      .row.grid3, .row.grid4{ grid-template-columns:1fr; }
+    }
+
+    .hr{ height:1px; background: rgba(70,255,130,.12); margin:2px 0; }
+
+    .terminal{
+      border:1px solid rgba(70,255,130,.18);
+      border-radius:12px;
+      overflow:hidden;
+      background: rgba(0,0,0,.22);
+      min-height:0;
+      display:flex;
+      flex-direction:column;
+
+    }
+    .termTop{
+      display:flex; justify-content:space-between; align-items:center;
+      padding:8px 10px;
+      border-bottom:1px solid rgba(70,255,130,.12);
+      font-size:10px;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      color: rgba(200,255,215,.78);
+    }
+    .termBody{
+      padding:10px;
+      overflow:auto;
+      font-size:11px;
+      line-height:1.45;
+      color: rgba(190,255,210,.84);
+      min-height:0;
+      flex: 1;
+    }
+    .code{ white-space:pre; tab-size:2; }
+    .cm{ color: rgba(170,255,195,.55); }
+    .hl{ color: var(--fg2); }
+    .er{ color: var(--bad); }
+
+    .ioPanel{
+      border:1px solid rgba(70,255,130,.18);
+      border-radius:12px;
+      background: rgba(0,0,0,.18);
+      overflow:hidden;
+      min-height:0;
+      display:flex;
+      flex-direction:column;
+    }
+    .ioPanel header{
+      padding:8px 10px;
+      border-bottom:1px solid rgba(70,255,130,.12);
+      display:flex; justify-content:space-between; align-items:center;
+      font-size:10px;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      color: rgba(200,255,215,.78);
+    }
+    .ioBody{
+      padding:10px;
+      min-height:0;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+    .sigRow{
+      display:grid;
+      grid-template-columns: 64px 1fr;
+      gap:10px;
+      align-items:center;
+    }
+    .sigLabel{
+      font-size:10px;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      color: rgba(170,255,195,.72);
+      white-space:nowrap;
+    }
+    .sigLine{
+      font-size:12px;
+      letter-spacing:.10em;
+      color: rgba(200,255,215,.88);
+      padding:8px 10px;
+      border-radius:10px;
+      background: rgba(0,0,0,.22);
+      border:1px solid rgba(70,255,130,.16);
+      box-shadow: 0 0 0 1px rgba(70,255,130,.05) inset;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .sigLine .on{ color: var(--fg2); }
+    .sigLine .off{ color: rgba(160,255,190,.55); }
+    .sigLine .sep{ color: rgba(170,255,195,.22); }
+    .sigMeta{
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      font-size:10px;
+      color: rgba(170,255,195,.62);
+      letter-spacing:.08em;
+      margin-top:2px;
+    }
+
+    .scope{
+      border:1px solid rgba(70,255,130,.18);
+      border-radius: 12px;
+      background:
+        linear-gradient(180deg, rgba(0,0,0,.18), rgba(0,0,0,.06)),
+        repeating-linear-gradient(90deg, transparent 0, transparent 34px, rgba(70,255,130,.07) 35px, transparent 36px),
+        repeating-linear-gradient(0deg, transparent 0, transparent 22px, rgba(70,255,130,.07) 23px, transparent 24px);
+      padding:8px;
+      overflow:hidden;
+      flex: 0 0 auto;
+    }
+    .scope svg{ width:100%; height:110px; display:block; filter: drop-shadow(0 0 10px rgba(70,255,130,.12)); }
+
+    /* Editor: single scrollbar on container; textarea/pre do not create their own */
+    .editorWrap{
+      border:1px solid rgba(70,255,130,.18);
+      border-radius:12px;
+      background: rgba(0,0,0,.20);
+      overflow:hidden;
+      display:flex;
+      flex-direction:column;
+      min-height:0;
+      flex: 0 1 auto;
+    }
+    .editorTop{
+      padding:8px 10px;
+      border-bottom:1px solid rgba(70,255,130,.12);
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+      font-size:10px;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      color: rgba(200,255,215,.78);
+    }
+    .editorBody{
+      position:relative;
+      min-height:0;
+      flex:1;
+      overflow:auto;           /* only scrollbar */
+	  letter-spacing: .08em;
+    }
+    .editorBody pre{
+      margin:0;
+      padding:10px;
+      font-size:11px;
+      line-height:1.35;
+      white-space:pre;
+      overflow:visible;        /* no scroll */
+      pointer-events:none;
+    }
+    .editorBody textarea{
+      position:absolute;
+      inset:0;
+      width:100%;
+      height:100%;
+      resize:none;
+      border:0;
+      outline:none;
+      background:transparent;
+
+      color:transparent;       /* hide raw text (highlight shows behind) */
+      caret-color: var(--fg);
+      padding:10px;
+      font-size:11px;
+      line-height:1.35;
+      white-space:pre;
+
+      overflow:hidden;         /* no second scrollbar */
+    }
+    .editorBody textarea::selection{ background: rgba(120,255,160,.25); }
+
+    .tokC{ color: rgba(170,255,195,.55); }
+    .tokO{ color: rgba(136,255,125,.95); }
+    .tokR{ color: rgba(125,255,207,.92); }
+    .tokN{ color: rgba(255,230,106,.90); }
+    .tokL{ color: rgba(200,255,215,.88); }
+
+    .toast{
+      position:fixed;
+      left:50%;
+      bottom:14px;
+      transform: translateX(-50%);
+      z-index:10;
+      padding:10px 12px;
+      border-radius: 12px;
+      border:1px solid rgba(70,255,130,.22);
+      background: rgba(0,0,0,.55);
+      color: rgba(210,255,225,.9);
+      box-shadow: 0 18px 60px rgba(0,0,0,.45), var(--glow);
+      font-size:12px;
+      letter-spacing:.08em;
+      opacity:0;
+      pointer-events:none;
+      transition: opacity .2s ease, transform .2s ease;
+    }
+    .toast.show{ opacity:1; transform: translateX(-50%) translateY(-2px); }
+
+    ::-webkit-scrollbar{ width: 12px; height:12px; }
+    ::-webkit-scrollbar-track{ background: rgba(0,0,0,.22); border-left:1px solid rgba(70,255,130,.10); }
+    ::-webkit-scrollbar-thumb{
+      background: linear-gradient(180deg, rgba(70,255,130,.28), rgba(70,255,130,.16));
+      border:1px solid rgba(120,255,160,.28);
+      border-radius: 999px;
+      box-shadow: 0 0 10px rgba(70,255,130,.18);
+    }
+    ::-webkit-scrollbar-thumb:hover{
+      background: linear-gradient(180deg, rgba(120,255,160,.35), rgba(70,255,130,.20));
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <div class="topbar">
+      <div class="brand">
+        <div class="logo" aria-hidden="true"></div>
+        <div class="brandText">
+          <h1>HACKME</h1>
+          <div class="sub">blackbox series • cpu sim terminal</div>
+          <div class="cred">
+            created by <a href="https://khatynkadynamics.github.io" target="_blank" rel="noopener noreferrer">khatynkadynamics.github.io</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="status">
+        <div class="pill"><span class="dot" id="dotRun"></span><span id="runText">CPU: HALT</span></div>
+        <div class="pill"><span class="dot warn" id="dotSec"></span><span id="secText">SEC: ARMED</span></div>
+        <div class="pill"><span class="dot" id="dotClk"></span><span id="clkText">TICK: 0</span></div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <section class="panel">
+        <header>
+          <h2>Program & Simulation</h2>
+          <div class="meta" id="metaStamp">BOOT: --:--:--</div>
+        </header>
+
+        <div class="body">
+          <div class="row" style="justify-content:space-between;">
+            <div class="row" style="gap:8px;">
+              <button class="btn" id="btnStart">Start</button>
+              <button class="btn secondary" id="btnStop">Stop</button>
+              <button class="btn secondary" id="btnStep">Step</button>
+              <button class="btn secondary" id="btnReset">Reset</button>
+            </div>
+            <div class="row" style="gap:8px;">
+              <button class="btn secondary" id="btnHelp">ISA Help</button>
+            </div>
+          </div>
+
+          <div class="row grid3">
+            <div class="field">
+              <label for="inA">Input A (bits)</label>
+              <input id="inA" type="text" value="0011010110100110" />
+            </div>
+            <div class="field">
+              <label for="inB">Input B (bits)</label>
+              <input id="inB" type="text" value="0101101001011010" />
+            </div>
+            <div class="field">
+              <label for="runMode">Mode</label>
+              <select id="runMode">
+                <option value="bounded" selected>BOUNDED</option>
+                <option value="continuous">CONTINUOUS</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row grid4">
+            <div class="field">
+              <label for="tickHz">Speed (steps/sec)</label>
+              <input id="tickHz" type="number" min="1" max="60" value="12" />
+            </div>
+            <div class="field">
+              <label for="maxSteps">Max steps</label>
+              <input id="maxSteps" type="number" min="1" max="20000" value="2000" />
+            </div>
+            <div class="field">
+              <label for="wrapMode">Input wrap</label>
+              <select id="wrapMode">
+                <option value="halt" selected>HALT AT END</option>
+                <option value="wrap">WRAP</option>
+                <option value="hold0">HOLD 0</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="exampleSel">Examples</label>
+              <select id="exampleSel">
+                <option value="xor" selected>OUT = A XOR B</option>
+                <option value="and">OUT = A AND B</option>
+                <option value="or">OUT = A OR B</option>
+                <option value="edgeA">RISING EDGE DETECT (A)</option>
+                <option value="toggleOnA">TOGGLE ON A=1</option>
+                <option value="latchA">LATCH A WHEN B=1</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="ioPanel">
+            <header>
+              <span>I/O LINES</span>
+              <span class="cm">latest window</span>
+            </header>
+            <div class="ioBody">
+              <div class="sigRow">
+                <div class="sigLabel">A</div>
+                <div class="sigLine" id="lineA"></div>
+              </div>
+              <div class="sigRow">
+                <div class="sigLabel">B</div>
+                <div class="sigLine" id="lineB"></div>
+              </div>
+              <div class="sigRow">
+                <div class="sigLabel">OUT</div>
+                <div class="sigLine" id="lineO"></div>
+              </div>
+              <div class="sigMeta">
+                <span id="lineMetaL">t=0</span>
+                <span id="lineMetaR">window=64</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="editorWrap" >
+            <div class="editorTop">
+              <span>ASSEMBLY</span>
+              <span class="cm">single-scroll • highlighted</span>
+            </div>
+            <div class="editorBody" id="editorBody">
+              <pre id="asmPretty" aria-hidden="true"></pre>
+              <textarea id="asm" spellcheck="false"></textarea>
+            </div>
+          </div>
+
+          <div class="scope">
+            <svg viewBox="0 0 900 150" preserveAspectRatio="none" aria-label="Signals">
+              <defs>
+                <linearGradient id="gA" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="rgba(120,255,160,.95)"/>
+                  <stop offset="1" stop-color="rgba(70,255,130,.55)"/>
+                </linearGradient>
+              </defs>
+
+              <text x="8" y="22" fill="rgba(200,255,215,.65)" font-size="12" font-family="ui-monospace, monospace">A</text>
+              <text x="8" y="62" fill="rgba(200,255,215,.65)" font-size="12" font-family="ui-monospace, monospace">B</text>
+              <text x="8" y="102" fill="rgba(200,255,215,.65)" font-size="12" font-family="ui-monospace, monospace">OUT</text>
+              <text x="8" y="142" fill="rgba(200,255,215,.55)" font-size="12" font-family="ui-monospace, monospace">CLK</text>
+
+              <path id="waveA" d="" fill="none" stroke="url(#gA)" stroke-width="3" />
+              <path id="waveB" d="" fill="none" stroke="rgba(125,255,207,.9)" stroke-width="3" />
+              <path id="waveO" d="" fill="none" stroke="rgba(255,230,106,.9)" stroke-width="3" />
+              <path id="waveC" d="" fill="none" stroke="rgba(190,255,210,.55)" stroke-width="2" />
+            </svg>
+          </div>
+        </div>
+      </section>
+
+      <aside class="panel">
+        <header>
+          <h2>CPU State</h2>
+          <div class="meta">PC=<span id="stPC">0</span> • Z=<span id="stZ">0</span> • HALT=<span id="stH">0</span></div>
+        </header>
+
+        <div class="body">
+          <div class="row">
+            <button class="btn" id="btnArm">Arm</button>
+            <button class="btn secondary" id="btnDisarm">Disarm</button>
+            <button class="btn danger" id="btnClearIO">Clear I/O</button>
+          </div>
+
+          <div class="hr"></div>
+
+          <div class="terminal" style="min-height:0; flex: 0 1 auto;">
+            <div class="termTop">
+              <span>REGISTERS</span>
+              <span class="cm">1-bit regs</span>
+            </div>
+            <div class="termBody" id="regs"></div>
+          </div>
+
+          <div class="terminal" style="min-height:0; max-height:300px; flex: 1;">
+            <div class="termTop">
+              <span>SIM CONSOLE</span>
+              <span id="termHint">READY</span>
+            </div>
+            <div class="termBody" id="termBody">
+              <div class="code" id="termCode"></div>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <div class="toast" id="toast">…</div>
+
+  <script>
+    const $ = (s)=>document.querySelector(s);
+
+    /* ---------- helpers ---------- */
+    function pad2(n){ return String(n).padStart(2,"0"); }
+    function nowStamp(){
+      const d = new Date();
+      return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+    }
+    function toast(msg){
+      const el = $("#toast");
+      el.textContent = msg;
+      el.classList.add("show");
+      clearTimeout(toast._t);
+      toast._t = setTimeout(()=>el.classList.remove("show"), 1400);
+    }
+    function logLine(s, cls=""){
+      const el = $("#termCode");
+      const line = document.createElement("div");
+      line.className = "code " + cls;
+      line.textContent = s;
+      el.appendChild(line);
+      const body = $("#termBody");
+      body.scrollTop = body.scrollHeight;
+    }
+    function setRunUI(running){
+      $("#runText").textContent = `CPU: ${running ? "RUN" : "HALT"}`;
+      $("#dotRun").className = "dot " + (running ? "" : "warn");
+    }
+    function setArmed(on){
+      state.armed = !!on;
+      $("#secText").textContent = `SEC: ${state.armed ? "ARMED" : "DISARMED"}`;
+      $("#dotSec").className = "dot " + (state.armed ? "warn" : "");
+      toast(state.armed ? "SECURITY ARMED" : "SECURITY DISARMED");
+    }
+    function sanitizeBits(s){ return (s || "").replace(/[^01]/g,""); }
+
+    /* ---------- scope ---------- */
+    function wavePath(bits, y, amp, x0, x1){
+      const n = bits.length;
+      if (!n) return `M ${x0} ${y}`;
+      const w = (x1 - x0) / n;
+      const hi = y - amp, lo = y + amp;
+
+      let d = `M ${x0} ${bits[0]?hi:lo}`;
+      for (let i=0;i<n;i++){
+        const xA = x0 + i*w;
+        const xB = x0 + (i+1)*w;
+        const yy = bits[i]?hi:lo;
+        d += ` L ${xA} ${yy} L ${xB} ${yy}`;
+        if (i<n-1 && bits[i+1]!==bits[i]){
+          const y2 = bits[i+1]?hi:lo;
+          d += ` L ${xB} ${y2}`;
+        }
+      }
+      return d;
+    }
+
+    /* ---------- Highlighting ---------- */
+    const OPS = new Set(["NOP","LDI","IN","MOV","NOT","AND","OR","XOR","ADD","CMP","JZ","JNZ","JMP","OUT","TICK","HALT"]);
+    const REGS = new Set(["ACC","R0","R1","R2","R3","A","B"]);
+
+    function escHtml(s){
+      return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    }
+
+    function highlightAsm(text){
+     // Split per line to handle comments easily
+      const lines = text.split("\n");
+      const out = [];
+
+      for (const line of lines){
+        const idx = line.indexOf(";");
+        const codePart = idx >= 0 ? line.slice(0, idx) : line;
+        const comPart  = idx >= 0 ? line.slice(idx) : "";
+
+        let code = escHtml(codePart);
+
+        // label at start: NAME:
+        code = code.replace(/^(\s*)([A-Za-z_][A-Za-z0-9_]*)(:)/, (m,ws,lbl,colon)=>
+          `${ws}<span class="tokL">${lbl}</span><span class="tok-p">${colon}</span>`
+        );
+
+        // tokenize words and punctuation (very light)
+        // highlight ops, regs, numbers/hex/binary
+        code = code.replace(/\b([A-Za-z_][A-Za-z0-9_]*)\b/g, (m, w)=>{
+          const u = w.toUpperCase();
+          if (OPS.has(u)) return `<span class="tokO">${w}</span>`;
+          if (REGS.has(u)) return `<span class="tokR">${w}</span>`;
+          return w;
+        });
+
+        // numbers: 0/1, decimals, 0x.., 0b..
+        code = code.replace(/\b(0x[0-9A-Fa-f]+|0b[01]+|\d+)\b/g, `<span class="tokN">$1</span>`);
+
+        // punctuation highlights
+        code = code.replace(/([,\(\)])/g, `<span class="tokL">$1</span>`);
+
+        const comment = comPart ? `<span class="tokC">${escHtml(comPart)}</span>` : "";
+        out.push(code + comment);
+      }
+
+      // keep trailing newline height stable
+      return out.join("\n") + (text.endsWith("\n") ? "" : "\n");
+    }
+
+    function syncHighlight(){
+      $("#asmPretty").innerHTML = highlightAsm($("#asm").value);
+    }
+
+    /* Editor scrolling: one scrollbar on #editorBody. We translate the content. */
+    function syncEditorScrollFromContainer(){
+      const body = $("#editorBody");
+      const y = body.scrollTop;
+      const x = body.scrollLeft;
+      $("#asmPretty").style.transform = `translate(${-x}px, ${-y}px)`;
+      $("#asm").style.transform      = `translate(${-x}px, ${-y}px)`;
+    }
+
+    function approxCaretLine(text, idx){
+      // count newlines up to idx (safe and fast enough for this use)
+      let count = 0;
+      for (let i=0;i<idx && i<text.length;i++){
+        if (text.charCodeAt(i) === 10) count++; // ''
+      }
+      return count;
+    }
+
+    function ensureCaretVisible(){
+      const ta = $("#asm");
+      const body = $("#editorBody");
+      const line = approxCaretLine(ta.value, ta.selectionStart);
+      const lineHeight = 1.35 * 11; // matches CSS
+      const caretY = line * lineHeight;
+
+      const top = body.scrollTop;
+      const bottom = top + body.clientHeight - 24;
+
+      if (caretY < top) body.scrollTop = Math.max(0, caretY - 12);
+      else if (caretY > bottom) body.scrollTop = Math.max(0, caretY - body.clientHeight + 24);
+
+      syncEditorScrollFromContainer();
+    }
+
+    /* ---------- VM ---------- */
+    function parseProgram(text){
+      const lines = String(text).split("\n");
+      const cleaned = [];
+      const labels = new Map();
+
+      for (let i=0;i<lines.length;i++){
+        const noComment = lines[i].replace(/;.*$/,"").trim();
+        if (!noComment) continue;
+
+        const m = noComment.match(/^([A-Za-z_][A-Za-z0-9_]*):\s*(.*)$/);
+        if (m){
+          const name = m[1];
+          if (labels.has(name)) throw new Error(`Duplicate label: ${name}`);
+          labels.set(name, cleaned.length);
+          if (m[2].trim()) cleaned.push({ text: m[2].trim(), srcLine:i+1 });
+        } else {
+          cleaned.push({ text: noComment, srcLine:i+1 });
+        }
+      }
+
+      const prog = cleaned.map(obj=>{
+        const parts = obj.text.trim().split(/\s+/);
+        const op = parts[0].toUpperCase();
+        const rest = obj.text.slice(parts[0].length).trim();
+        const args = rest ? rest.split(",").map(s=>s.trim()).filter(Boolean) : [];
+        return { op, args, srcLine: obj.srcLine, raw: obj.text };
+      });
+
+      return { prog, labels };
+    }
+
+    function getVal(cpu, tok){
+      const t = tok.toUpperCase();
+      if (t === "ACC") return cpu.ACC & 1;
+      if (t === "R0" || t === "R1" || t === "R2" || t === "R3") return cpu[t] & 1;
+      if (t === "0" || t === "1") return Number(t);
+      throw new Error(`Bad operand: ${tok}`);
+    }
+
+    function setReg(cpu, tok, v){
+      const t = tok.toUpperCase();
+      v = v & 1;
+      if (t === "ACC") cpu.ACC = v;
+      else if (t === "R0" || t === "R1" || t === "R2" || t === "R3") cpu[t] = v;
+      else throw new Error(`Bad destination: ${tok}`);
+      cpu.Z = (cpu.ACC === 0) ? 1 : 0;
+    }
+
+    function readInputBit(which, t){
+      const arr = (which === "A") ? state.inA : state.inB;
+      if (t < arr.length) return arr[t] | 0;
+
+      if (state.wrapMode === "wrap"){
+        if (!arr.length) return 0;
+        return arr[t % arr.length] | 0;
+      }
+      if (state.wrapMode === "hold0") return 0;
+      return 0;
+    }
+
+    function shouldHaltAtEnd(t){
+      if (state.runMode !== "bounded") return false;
+      if (state.wrapMode !== "halt") return false;
+      const end = Math.max(state.inA.length, state.inB.length);
+      return t >= end;
+    }
+
+    function formatSig(bits){
+      let s = "";
+      for (let i=0;i<bits.length;i++){
+        const b = bits[i] | 0;
+        s += b ? `<span class="on">█</span>` : `<span class="off">·</span>`;
+        if ((i+1) % 4 === 0 && i < bits.length-1) s += `<span class="sep"> </span>`;
+      }
+      return s || `<span class="off">·</span>`;
+    }
+
+    function updateIOLines(){
+      const cpu = state.cpu;
+      const win = state.ioWindow;
+      const end = Math.max(0, cpu.T);
+      const start = Math.max(0, end - win);
+
+      const aBits = [], bBits = [], oBits = [];
+      for (let t=start; t<end; t++){
+        aBits.push(readInputBit("A", t));
+        bBits.push(readInputBit("B", t));
+        oBits.push((state.out[t] ?? 0) | 0);
+      }
+
+      $("#lineA").innerHTML = formatSig(aBits);
+      $("#lineB").innerHTML = formatSig(bBits);
+      $("#lineO").innerHTML = formatSig(oBits);
+
+      $("#lineMetaL").textContent = `t=${cpu.T}  pc=${cpu.PC}`;
+      $("#lineMetaR").textContent = `window=${win}  mode=${state.runMode}/${state.wrapMode}`;
+    }
+
+    function updateStateUI(){
+      const cpu = state.cpu;
+      $("#stPC").textContent = cpu.PC;
+      $("#stZ").textContent = cpu.Z;
+      $("#stH").textContent = cpu.HALT;
+
+      $("#regs").innerHTML = `
+        <div class="code">
+T=${cpu.T}  PC=${cpu.PC}  steps=${cpu.steps}/${state.maxSteps}
+ACC=${cpu.ACC}  OUT=${cpu.OUT}
+R0=${cpu.R0}  R1=${cpu.R1}  R2=${cpu.R2}  R3=${cpu.R3}
+Z=${cpu.Z}  HALT=${cpu.HALT}
+MODE=${state.runMode.toUpperCase()}  WRAP=${state.wrapMode.toUpperCase()}
+        </div>
+      `;
+    }
+
+    function updateScopeUI(){
+      const cpu = state.cpu;
+      const n = 32;
+      const start = Math.max(0, cpu.T - (n-1));
+      const end = start + n;
+
+      const A = [], B = [], O = [], C = [];
+      for (let t=start; t<end; t++){
+        A.push(readInputBit("A", t));
+        B.push(readInputBit("B", t));
+        O.push((state.out[t] ?? 0) | 0);
+        C.push((t % 2) ? 1 : 0);
+      }
+      $("#waveA").setAttribute("d", wavePath(A, 22, 11, 42, 892));
+      $("#waveB").setAttribute("d", wavePath(B, 62, 11, 42, 892));
+      $("#waveO").setAttribute("d", wavePath(O, 102, 11, 42, 892));
+      $("#waveC").setAttribute("d", wavePath(C, 142, 8, 42, 892));
+    }
+
+    function setRun(on){
+      state.running = !!on;
+      setRunUI(state.running);
+      $("#termHint").textContent = state.running ? "RUNNING" : "READY";
+    }
+
+    function stepCPU(){
+      if (!state.vm) return;
+      const { prog, labels } = state.vm;
+      const cpu = state.cpu;
+      if (cpu.HALT) return;
+
+      if (cpu.steps >= state.maxSteps){
+        cpu.HALT = 1;
+        setRun(false);
+        logLine(`! max steps reached (${state.maxSteps})`, "er");
+        return;
+      }
+      if (cpu.PC < 0 || cpu.PC >= prog.length){
+        cpu.HALT = 1;
+        setRun(false);
+        logLine(`! PC out of range: ${cpu.PC}`, "er");
+        return;
+      }
+
+      const ins = prog[cpu.PC];
+      cpu.steps++;
+
+      const a = readInputBit("A", cpu.T);
+      const b = readInputBit("B", cpu.T);
+
+      function jmpLabel(name){
+        if (!labels.has(name)) throw new Error(`Unknown label: ${name}`);
+        cpu.PC = labels.get(name);
+      }
+
+      try{
+        switch(ins.op){
+          case "NOP": cpu.PC++; break;
+          case "LDI":
+            if (ins.args.length!==1) throw new Error("LDI needs 1 arg");
+            setReg(cpu, "ACC", getVal(cpu, ins.args[0]));
+            cpu.PC++;
+            break;
+          case "IN":
+            if (ins.args.length!==1) throw new Error("IN needs 1 arg");
+            if (ins.args[0].toUpperCase() === "A") setReg(cpu, "ACC", a);
+            else if (ins.args[0].toUpperCase() === "B") setReg(cpu, "ACC", b);
+            else throw new Error("IN expects A or B");
+            cpu.PC++;
+            break;
+          case "MOV":
+            if (ins.args.length!==2) throw new Error("MOV needs 2 args");
+            setReg(cpu, ins.args[1], getVal(cpu, ins.args[0]));
+            cpu.PC++;
+            break;
+          case "NOT":
+            setReg(cpu, "ACC", (cpu.ACC ^ 1) & 1);
+            cpu.PC++;
+            break;
+          case "AND":
+          case "OR":
+          case "XOR":
+          case "ADD":
+            if (ins.args.length!==1) throw new Error(`${ins.op} needs 1 arg`);
+            const v = getVal(cpu, ins.args[0]);
+            if (ins.op === "AND") setReg(cpu, "ACC", (cpu.ACC & v) & 1);
+            if (ins.op === "OR")  setReg(cpu, "ACC", (cpu.ACC | v) & 1);
+            if (ins.op === "XOR" || ins.op === "ADD") setReg(cpu, "ACC", (cpu.ACC ^ v) & 1);
+            cpu.PC++;
+            break;
+          case "CMP":
+            if (ins.args.length!==1) throw new Error("CMP needs 1 arg");
+            cpu.Z = (cpu.ACC === getVal(cpu, ins.args[0])) ? 1 : 0;
+            cpu.PC++;
+            break;
+          case "JZ":
+            if (ins.args.length!==1) throw new Error("JZ needs 1 arg");
+            if (cpu.Z) jmpLabel(ins.args[0]); else cpu.PC++;
+            break;
+          case "JNZ":
+            if (ins.args.length!==1) throw new Error("JNZ needs 1 arg");
+            if (!cpu.Z) jmpLabel(ins.args[0]); else cpu.PC++;
+            break;
+          case "JMP":
+            if (ins.args.length!==1) throw new Error("JMP needs 1 arg");
+            jmpLabel(ins.args[0]);
+            break;
+          case "OUT":
+            if (ins.args.length!==1) throw new Error("OUT needs 1 arg");
+            cpu.OUT = getVal(cpu, ins.args[0]) & 1;
+            state.out[cpu.T] = cpu.OUT;
+            cpu.PC++;
+            break;
+          case "TICK":
+            cpu.T++;
+            cpu.PC = 0;
+            if (shouldHaltAtEnd(cpu.T)){
+              cpu.HALT = 1;
+              setRun(false);
+              logLine("; end of inputs => HALT (bounded)", "cm");
+            }
+            break;
+          case "HALT":
+            cpu.HALT = 1;
+            setRun(false);
+            cpu.PC++;
+            break;
+          default:
+            throw new Error(`Unknown opcode: ${ins.op}`);
+        }
+      } catch(e){
+        cpu.HALT = 1;
+        setRun(false);
+        logLine(`! error @ line ${ins.srcLine}: ${ins.raw}`, "er");
+        logLine(`! ${e.message}`, "er");
+      }
+
+      $("#clkText").textContent = `TICK: ${cpu.T}`;
+      updateStateUI();
+      updateScopeUI();
+      updateIOLines();
+    }
+
+    function stopLoop(){
+      if (state._timer){
+        clearInterval(state._timer);
+        state._timer = null;
+      }
+    }
+
+    function startLoop(){
+      stopLoop();
+      setRun(true);
+      const intervalMs = Math.round(1000 / state.tickHz);
+      state._timer = setInterval(()=>{
+        const budget = 48;
+        for (let i=0;i<budget;i++){
+          if (!state.running || state.cpu.HALT) break;
+          stepCPU();
+        }
+      }, intervalMs);
+    }
+
+    function loadProgramFromUI(){
+      const vm = parseProgram($("#asm").value);
+      state.vm = vm;
+      logLine(`; program loaded (${vm.prog.length} instructions, ${vm.labels.size} labels)`, "cm");
+    }
+
+    const EXAMPLES = {
+      xor:
+`; OUT = A XOR B
+START:
+  IN A
+  MOV ACC,R0
+  IN B
+  XOR R0
+  OUT ACC
+  TICK
+  JMP START
+`,
+      and:
+`; OUT = A AND B
+START:
+  IN A
+  MOV ACC,R0
+  IN B
+  AND R0
+  OUT ACC
+  TICK
+  JMP START
+`,
+      or:
+`; OUT = A OR B
+START:
+  IN A
+  MOV ACC,R0
+  IN B
+  OR R0
+  OUT ACC
+  TICK
+  JMP START
+`,
+      edgeA:
+`; Rising edge detect on A:
+; OUT=1 only when A transitions 0->1
+; R0 holds previous A
+START:
+  IN A
+  MOV ACC,R1
+  MOV R0,ACC
+  NOT
+  AND R1
+  OUT ACC
+  MOV R1,R0
+  TICK
+  JMP START
+`,
+      toggleOnA:
+`; Toggle output bit when A==1 (T flip-flop gated by A)
+; R0 holds state
+START:
+  IN A
+  CMP 1
+  JZ  DO
+  JMP NO
+DO:
+  MOV R0,ACC
+  NOT
+  MOV ACC,R0
+NO:
+  OUT R0
+  TICK
+  JMP START
+`,
+      latchA:
+`; Latch A when B==1, else hold
+; R0 holds latched value
+START:
+  IN B
+  CMP 1
+  JZ  LATCH
+  JMP SKIP
+LATCH:
+  IN A
+  MOV ACC,R0
+SKIP:
+  OUT R0
+  TICK
+  JMP START
+`
+    };
+
+    function applyExample(key){
+      $("#asm").value = EXAMPLES[key] ?? EXAMPLES.xor;
+      syncHighlight();
+      $("#editorBody").scrollTop = 0;
+      $("#editorBody").scrollLeft = 0;
+      syncEditorScrollFromContainer();
+      toast("EXAMPLE LOADED");
+    }
+
+    function resetSim(keepProgram=false){
+      stopLoop();
+      setRun(false);
+
+      state.inA = sanitizeBits($("#inA").value).split("").map(c=>c==="1"?1:0);
+      state.inB = sanitizeBits($("#inB").value).split("").map(c=>c==="1"?1:0);
+
+      state.runMode = $("#runMode").value;
+      state.wrapMode = $("#wrapMode").value;
+
+      state.maxSteps = Math.max(1, Math.min(20000, Number($("#maxSteps").value||2000)));
+      state.tickHz = Math.max(1, Math.min(60, Number($("#tickHz").value||12)));
+
+      state.out = [];
+      state.cpu = {
+        PC: 0, T: 0,
+        ACC: 0, R0: 0, R1: 0, R2: 0, R3: 0,
+        OUT: 0,
+        Z: 1,
+        HALT: 0,
+        steps: 0
+      };
+
+      if (!keepProgram) loadProgramFromUI();
+
+      $("#termCode").innerHTML = "";
+      logLine("; reset", "cm");
+      logLine(`; mode=${state.runMode} wrap=${state.wrapMode} speed=${state.tickHz} steps/s`, "cm");
+      logLine(`; INA len=${state.inA.length}  INB len=${state.inB.length}`, "cm");
+      logLine("; convention: compute OUT then TICK", "cm");
+
+      $("#clkText").textContent = `TICK: ${state.cpu.T}`;
+      updateStateUI();
+      updateScopeUI();
+      updateIOLines();
+      toast("RESET");
+    }
+
+    function showHelp(){
+      const msg =
+`ISA QUICK HELP
+- 1-bit ACC + 1-bit regs R0..R3
+- Inputs: IN A | IN B (reads current time sample)
+- Output: OUT X (X = 0|1|ACC|R0..R3)
+- Flow: JMP label, JZ label, JNZ label, CMP X
+- Logic: NOT, AND X, OR X, XOR X, ADD X (mod 2)
+- MOV src,dst  (dst=ACC|R0..R3)
+- TICK advances time and restarts program at PC=0
+- HALT stops execution
+
+MODES
+- BOUNDED + HALT AT END: stops when inputs end
+- CONTINUOUS: never stops at input end
+- WRAP: inputs repeat
+- HOLD 0: inputs become 0 past end`;
+      toast("ISA HELP -> CONSOLE");
+      logLine(msg, "cm");
+    }
+
+    const state = {
+      armed: true,
+      running: false,
+      tickHz: 12,
+      maxSteps: 2000,
+      runMode: "bounded",
+      wrapMode: "halt",
+      ioWindow: 64,
+      inA: [],
+      inB: [],
+      out: [],
+      cpu: null,
+      vm: null,
+      _timer: null
+    };
+
+    /* ---------- events ---------- */
+    $("#btnStart").addEventListener("click", ()=>{
+      try{
+        loadProgramFromUI();
+        if (state.cpu && state.cpu.HALT) resetSim(true);
+        startLoop();
+        toast("START");
+      } catch(e){
+        logLine(`! ${e.message}`, "er");
+        toast("PROGRAM ERROR");
+      }
+    });
+
+    $("#btnStop").addEventListener("click", ()=>{
+      stopLoop();
+      setRun(false);
+      toast("STOP");
+    });
+
+    $("#btnStep").addEventListener("click", ()=>{
+      try{
+        if (!state.vm) loadProgramFromUI();
+        if (state.cpu && state.cpu.HALT){ toast("HALTED"); return; }
+        setRun(false);
+        stepCPU();
+      } catch(e){
+        logLine(`! ${e.message}`, "er");
+      }
+    });
+
+    $("#btnReset").addEventListener("click", ()=> resetSim(false));
+    $("#btnHelp").addEventListener("click", showHelp);
+
+    $("#btnArm").addEventListener("click", ()=>setArmed(true));
+    $("#btnDisarm").addEventListener("click", ()=>setArmed(false));
+
+    $("#btnClearIO").addEventListener("click", ()=>{
+      state.out = [];
+      updateIOLines();
+      updateScopeUI();
+      toast("I/O CLEARED");
+    });
+
+    $("#inA").addEventListener("input", (e)=> e.target.value = sanitizeBits(e.target.value));
+    $("#inB").addEventListener("input", (e)=> e.target.value = sanitizeBits(e.target.value));
+
+    $("#runMode").addEventListener("change", ()=>{ state.runMode = $("#runMode").value; updateStateUI(); updateIOLines(); });
+    $("#wrapMode").addEventListener("change", ()=>{ state.wrapMode = $("#wrapMode").value; updateStateUI(); updateIOLines(); });
+
+    $("#exampleSel").addEventListener("change", ()=>{
+      applyExample($("#exampleSel").value);
+      resetSim(false);
+    });
+
+    // editor: highlight and caret visibility
+    $("#asm").addEventListener("input", ()=>{ syncHighlight(); ensureCaretVisible(); });
+    $("#asm").addEventListener("keydown", ()=> setTimeout(ensureCaretVisible, 0));
+    $("#asm").addEventListener("click", ensureCaretVisible);
+    $("#asm").addEventListener("keyup", ensureCaretVisible);
+
+    $("#editorBody").addEventListener("scroll", syncEditorScrollFromContainer);
+
+    window.addEventListener("keydown", (e)=>{
+      if (e.target && (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT" || e.target.tagName === "SELECT")) return;
+      if (e.key === " "){ e.preventDefault(); state.running ? $("#btnStop").click() : $("#btnStart").click(); }
+      if (e.key.toLowerCase() === "s") $("#btnStep").click();
+      if (e.key.toLowerCase() === "r") $("#btnReset").click();
+    });
+
+    /* ---------- boot ---------- */
+    function boot(){
+      $("#metaStamp").textContent = `BOOT: ${nowStamp()}`;
+      setArmed(true);
+      setRun(false);
+
+      applyExample("xor");
+      $("#exampleSel").value = "xor";
+
+      syncHighlight();
+      resetSim(false);
+      syncEditorScrollFromContainer();
+
+      setInterval(()=> { $("#metaStamp").textContent = `BOOT: ${nowStamp()}`; }, 500);
+    }
+    boot();
+  </script>
+</body>
+</html>

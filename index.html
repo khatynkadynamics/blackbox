@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>BLACKBOX SERIES — Booting…</title>
+  <style>
+    :root{
+      --bg:#050a07;
+      --fg:#c7ffbf;
+      --fg2:#88ff7d;
+      --dim2:#2ce83a;
+      --grid2:rgba(70,255,130,.14);
+      --warn:#ffe66a;
+      --bad:#ff6a6a;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --glow: 0 0 16px rgba(80,255,120,.16), 0 0 40px rgba(80,255,120,.08);
+    }
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; margin:0; }
+    body{
+      font-family: var(--mono);
+      color:var(--fg);
+      background:
+        radial-gradient(1200px 900px at 50% 30%, rgba(70,255,130,.12), transparent 55%),
+        linear-gradient(180deg, var(--bg), #020603 70%, #010302);
+      overflow:hidden;
+      height:100%;
+    }
+    /* CRT scanlines */
+    body::before{
+      content:""; position:fixed; inset:0; pointer-events:none; z-index:6;
+      background: repeating-linear-gradient(180deg, rgba(120,255,160,.05) 0px, rgba(120,255,160,.05) 1px, rgba(0,0,0,0) 2px, rgba(0,0,0,0) 4px);
+      mix-blend-mode: overlay; opacity:.6; animation: scan 8s linear infinite;
+    }
+    @keyframes scan{ 0%{background-position:0 0;} 100%{background-position:0 100px;} }
+    /* vignette */
+    body::after{
+      content:""; position:fixed; inset:-1px; pointer-events:none; z-index:7;
+      background: radial-gradient(1200px 900px at 50% 45%, transparent 52%, rgba(0,0,0,.72) 100%);
+    }
+    /* flicker */
+    .flicker{ position:fixed; inset:0; z-index:5; pointer-events:none; background:rgba(120,255,160,.02); animation: flick 5s steps(2) infinite; mix-blend-mode:overlay; }
+    @keyframes flick{ 0%,95%,100%{opacity:0;} 96%{opacity:.5;} 97%{opacity:.1;} 98%{opacity:.7;} 99%{opacity:.2;} }
+
+    #matrix{ position:fixed; inset:0; z-index:0; opacity:.08; pointer-events:none; }
+
+    /* CRT power-on sweep */
+    .powerOn{
+      position:fixed; inset:0; z-index:20; background:#000; pointer-events:none;
+      animation: powerSeq 1.1s ease-out forwards;
+    }
+    @keyframes powerSeq{
+      0%{ transform: scaleY(.002) scaleX(1); background:#0d1f12; opacity:1; }
+      35%{ transform: scaleY(.004) scaleX(1); background:#bfffce; opacity:1; }
+      55%{ transform: scaleY(1) scaleX(1); background:rgba(180,255,200,.6); opacity:.9; }
+      100%{ transform: scaleY(1) scaleX(1); background:rgba(0,0,0,0); opacity:0; }
+    }
+
+    .stage{
+      position:relative; z-index:2;
+      height:100%; width:100%;
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      gap:26px; padding:24px;
+    }
+
+    /* logo — isometric wireframe cube */
+    .logo{
+      width:150px; height:150px; position:relative;
+      display:grid; place-items:center;
+      opacity:0; transform: scale(.55);
+      animation: logoIn 1s cubic-bezier(.2,.8,.2,1) .5s forwards;
+      perspective: 600px;
+    }
+    @keyframes logoIn{ to{ opacity:1; transform: scale(1); } }
+    .logo .cubeSvg{
+      width:130px; height:130px; overflow:visible;
+      filter: drop-shadow(0 0 10px rgba(90,255,130,.45)) drop-shadow(0 0 26px rgba(70,255,130,.22));
+      transform-style: preserve-3d;
+      animation: cubeFloat 5.5s ease-in-out 1.6s infinite;
+    }
+    @keyframes cubeFloat{
+      0%,100%{ transform: rotateX(-14deg) rotateY(-8deg) translateY(0); }
+      50%{ transform: rotateX(-8deg) rotateY(10deg) translateY(-6px); }
+    }
+    /* each edge draws itself in */
+    .logo .edge{
+      fill:none; stroke:var(--fg2); stroke-width:6;
+      stroke-linecap:round; stroke-linejoin:round;
+      stroke-dasharray: 200; stroke-dashoffset: 200;
+      animation: drawEdge .5s ease forwards;
+    }
+    @keyframes drawEdge{ to{ stroke-dashoffset:0; } }
+    /* stagger the edge draw-in */
+    .logo .e1{ animation-delay:.7s; }
+    .logo .e2{ animation-delay:.85s; }
+    .logo .e3{ animation-delay:1.0s; }
+    .logo .e4{ animation-delay:1.15s; }
+    .logo .e5{ animation-delay:1.3s; }
+    .logo .e6{ animation-delay:1.45s; }
+    .logo .e7{ animation-delay:1.6s; }
+    .logo .e8{ animation-delay:1.75s; }
+    .logo .e9{ animation-delay:1.9s; }
+    /* vertex nodes pop after edges */
+    .logo .node{
+      fill:var(--fg2); opacity:0;
+      animation: nodePop .4s ease forwards 2.0s;
+      filter: drop-shadow(0 0 5px rgba(120,255,160,.8));
+    }
+    @keyframes nodePop{ 0%{ opacity:0; transform:scale(0); } 60%{ opacity:1; transform:scale(1.5); } 100%{ opacity:.9; transform:scale(1); } }
+    /* scan pulse traveling down the cube */
+    .logo .scan{
+      stroke:#bfffce; stroke-width:2; opacity:0;
+      animation: scanPulse 3.2s ease-in-out 2.2s infinite;
+    }
+    @keyframes scanPulse{ 0%,100%{ opacity:0; } 50%{ opacity:.7; } }
+    .ring{
+      position:absolute; inset:6px; border-radius:50%;
+      border:1px solid rgba(70,255,130,.22);
+      animation: pulseRing 2.6s ease-out 2s infinite;
+    }
+    @keyframes pulseRing{ 0%{ transform:scale(.7); opacity:.6; } 100%{ transform:scale(1.3); opacity:0; } }
+
+    /* title */
+    .title{
+      font-size: clamp(30px, 8vw, 62px);
+      letter-spacing:.34em; text-transform:uppercase; font-weight:700;
+      color: var(--fg2); text-shadow: 0 0 24px rgba(90,255,130,.3);
+      margin:0; text-align:center; position:relative;
+      opacity:0; animation: fadeUp .8s ease 1.3s forwards;
+    }
+    .title .glitchL{ position:relative; }
+    .title .glitchL::before, .title .glitchL::after{
+      content: attr(data-t); position:absolute; left:0; top:0; width:100%; overflow:hidden;
+    }
+    .title .glitchL::before{ color:#ff5b9e; animation: gA 2.3s infinite linear alternate; z-index:-1; }
+    .title .glitchL::after{ color:#5bd6ff; animation: gB 3.1s infinite linear alternate; z-index:-2; }
+    @keyframes gA{ 0%{clip-path:inset(0 0 82% 0); transform:translateX(-2px);} 50%{clip-path:inset(42% 0 40% 0);} 100%{clip-path:inset(76% 0 4% 0); transform:translateX(2px);} }
+    @keyframes gB{ 0%{clip-path:inset(70% 0 8% 0); transform:translateX(2px);} 50%{clip-path:inset(22% 0 55% 0);} 100%{clip-path:inset(4% 0 80% 0); transform:translateX(-2px);} }
+
+    .subtitle{
+      font-size:12px; letter-spacing:.4em; text-transform:uppercase; color: rgba(180,255,205,.72);
+      margin:-8px 0 0; text-align:center; opacity:0; animation: fadeUp .8s ease 1.7s forwards;
+    }
+    @keyframes fadeUp{ from{ opacity:0; transform: translateY(10px); } to{ opacity:1; transform: none; } }
+
+    /* boot log */
+    .boot{
+      width:min(560px, 92vw); min-height:132px;
+      border:1px solid var(--grid2); border-radius:12px;
+      background: rgba(0,0,0,.3); box-shadow: var(--glow);
+      padding:14px 16px; font-size:12px; line-height:1.75; color: rgba(190,255,210,.88);
+      opacity:0; animation: fadeUp .7s ease 2s forwards;
+    }
+    .boot .cm{ color: rgba(170,255,195,.55); }
+    .boot .hl{ color: var(--fg2); }
+    .boot .warn{ color: var(--warn); }
+    .cur{ display:inline-block; width:.62ch; height:1em; background:var(--fg2); transform: translateY(2px); animation: blink 1s steps(1) infinite; }
+    @keyframes blink{ 50%{ opacity:0; } }
+
+    /* progress */
+    .progWrap{ width:min(560px, 92vw); opacity:0; animation: fadeUp .7s ease 2.1s forwards; }
+    .progLabel{ display:flex; justify-content:space-between; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color: rgba(170,255,195,.6); margin-bottom:6px; }
+    .progBar{ height:8px; border-radius:999px; border:1px solid rgba(70,255,130,.22); background: rgba(0,0,0,.35); overflow:hidden; }
+    .progFill{ height:100%; width:0%; background: linear-gradient(90deg, rgba(70,255,130,.5), var(--dim2)); box-shadow: 0 0 12px rgba(70,255,130,.5); transition: width .18s ease; }
+
+    /* skip / enter */
+    .skip{
+      position:fixed; bottom:20px; left:50%; transform: translateX(-50%); z-index:8;
+      font-size:11px; letter-spacing:.16em; text-transform:uppercase; color: rgba(180,255,205,.6);
+      opacity:0; animation: fadeUp .6s ease 2.4s forwards;
+      display:flex; gap:8px; align-items:center;
+    }
+    .skip a{
+      color:var(--fg); text-decoration:none; border:1px solid var(--grid2);
+      padding:7px 14px; border-radius:999px; background: rgba(0,0,0,.25);
+      transition: border-color .15s ease, color .15s ease, filter .15s ease;
+    }
+    .skip a:hover{ border-color: rgba(120,255,160,.55); color: var(--fg2); filter: brightness(1.1); }
+
+    .cred{ position:fixed; top:16px; width:100%; text-align:center; z-index:8; font-size:10px; letter-spacing:.14em; color: rgba(170,255,195,.5); }
+    .cred a{ color: rgba(190,255,210,.8); text-decoration:none; border-bottom:1px dotted rgba(120,255,160,.3); }
+
+    /* fade-out transition to main menu */
+    .fadeOut{ animation: pageOut .7s ease forwards; }
+    @keyframes pageOut{ to{ opacity:0; filter: brightness(2.4) blur(2px); transform: scale(1.04); } }
+  </style>
+</head>
+<body>
+  <canvas id="matrix"></canvas>
+  <div class="flicker"></div>
+  <div class="powerOn"></div>
+
+  <div class="cred">created by <a href="https://khatynkadynamics.github.io" target="_blank" rel="noopener noreferrer">khatynkadynamics.github.io</a></div>
+
+  <div class="stage" id="stage">
+    <div class="logo" aria-hidden="true">
+      <span class="ring"></span>
+      <svg class="cubeSvg" viewBox="0 0 100 100" aria-label="Blackbox cube">
+        <!-- isometric cube: 7 visible vertices -->
+        <!-- T(50,8) L(9,31) R(91,31) C(50,54) BL(9,69) BR(91,69) B(50,92) -->
+        <!-- top face rhombus -->
+        <line class="edge e1" x1="50" y1="8"  x2="9"  y2="31"/>
+        <line class="edge e2" x1="9"  y1="31" x2="50" y2="54"/>
+        <line class="edge e3" x1="50" y1="54" x2="91" y2="31"/>
+        <line class="edge e4" x1="91" y1="31" x2="50" y2="8"/>
+        <!-- vertical edges -->
+        <line class="edge e5" x1="9"  y1="31" x2="9"  y2="69"/>
+        <line class="edge e6" x1="50" y1="54" x2="50" y2="92"/>
+        <line class="edge e7" x1="91" y1="31" x2="91" y2="69"/>
+        <!-- bottom visible edges -->
+        <line class="edge e8" x1="9"  y1="69" x2="50" y2="92"/>
+        <line class="edge e9" x1="50" y1="92" x2="91" y2="69"/>
+        <!-- traveling scan line -->
+        <line class="scan" x1="9" y1="50" x2="91" y2="50"/>
+        <!-- vertex nodes -->
+        <circle class="node" cx="50" cy="8"  r="3.4"/>
+        <circle class="node" cx="9"  cy="31" r="3.4"/>
+        <circle class="node" cx="91" cy="31" r="3.4"/>
+        <circle class="node" cx="50" cy="54" r="3.8"/>
+        <circle class="node" cx="9"  cy="69" r="3.4"/>
+        <circle class="node" cx="91" cy="69" r="3.4"/>
+        <circle class="node" cx="50" cy="92" r="3.4"/>
+      </svg>
+    </div>
+
+    <h1 class="title"><span class="glitchL" data-t="BLACKBOX">BLACKBOX</span></h1>
+    <p class="subtitle">series • interactive electronic puzzles</p>
+
+    <div class="boot" id="boot"></div>
+
+    <div class="progWrap">
+      <div class="progLabel"><span>system boot</span><span id="progPct">0%</span></div>
+      <div class="progBar"><div class="progFill" id="progFill"></div></div>
+    </div>
+  </div>
+
+  <div class="skip">
+    <span>booting…</span>
+    <a href="index.html" id="enterBtn">Enter now →</a>
+  </div>
+
+  <script>
+    const $ = s => document.querySelector(s);
+    const NEXT = "main.html";     // main menu page
+    const TOTAL_MS = 6200;         // total intro duration before auto-advance
+
+    /* ---- matrix rain ---- */
+    (function(){
+      const cv=$("#matrix"), ctx=cv.getContext("2d");
+      const glyphs="01ABCDEF⊕⊗▚▞░▓<>/\\|=+-*ΞΛΣ".split("");
+      let cols, drops, fs=14;
+      function resize(){ cv.width=innerWidth; cv.height=innerHeight; cols=Math.floor(cv.width/fs); drops=Array(cols).fill(0).map(()=>Math.random()*cv.height/fs); }
+      resize(); addEventListener("resize", resize);
+      (function draw(){
+        ctx.fillStyle="rgba(5,10,7,.18)"; ctx.fillRect(0,0,cv.width,cv.height); ctx.font=fs+"px monospace";
+        for(let i=0;i<cols;i++){ const ch=glyphs[Math.random()*glyphs.length|0], x=i*fs, y=drops[i]*fs;
+          ctx.fillStyle=Math.random()<0.04?"rgba(190,255,210,.9)":"rgba(70,255,130,.55)"; ctx.fillText(ch,x,y);
+          if(y>cv.height && Math.random()>0.975) drops[i]=0; drops[i]+=0.5+Math.random()*0.6; }
+        requestAnimationFrame(draw);
+      })();
+    })();
+
+    /* ---- boot log typing ---- */
+    const bootEl = $("#boot");
+    const lines = [
+      { d:2100, t:"<span class='cm'>[ boot ]</span> initializing blackbox core…" },
+      { d:2600, t:"<span class='cm'>[ 0.02 ]</span> mounting 1-bit ISA ............ <span class='hl'>OK</span>" },
+      { d:3100, t:"<span class='cm'>[ 0.05 ]</span> arming LFSR keystream ......... <span class='hl'>OK</span>" },
+      { d:3600, t:"<span class='cm'>[ 0.09 ]</span> linking serial bridge ........ <span class='hl'>OK</span>" },
+      { d:4200, t:"<span class='cm'>[ sec  ]</span> security module .............. <span class='warn'>ARMED</span>" },
+      { d:4800, t:"<span class='cm'>[ done ]</span> all systems nominal" },
+      { d:5400, t:"<span class='hl'>&gt;</span> entering main menu <span class='cur'></span>" }
+    ];
+    let shown = 0;
+    function pump(){
+      const now = performance.now() - START;
+      while (shown < lines.length && now >= lines[shown].d){
+        const div=document.createElement("div"); div.innerHTML=lines[shown].t;
+        bootEl.appendChild(div); bootEl.scrollTop=bootEl.scrollHeight; shown++;
+      }
+      // progress bar
+      const pct = Math.min(100, Math.round((now / (TOTAL_MS-400)) * 100));
+      $("#progFill").style.width = pct + "%";
+      $("#progPct").textContent = pct + "%";
+      if (now < TOTAL_MS) requestAnimationFrame(pump);
+    }
+
+    /* ---- go to menu ---- */
+    let done = false;
+    function goNext(){
+      if (done) return; done = true;
+      document.body.classList.add("fadeOut");
+      setTimeout(()=>{ location.href = NEXT; }, 650);
+    }
+
+    const START = performance.now();
+    requestAnimationFrame(pump);
+    const autoTimer = setTimeout(goNext, TOTAL_MS);
+
+    // allow skip via button / key / click
+    $("#enterBtn").addEventListener("click", (e)=>{ e.preventDefault(); clearTimeout(autoTimer); goNext(); });
+    addEventListener("keydown", (e)=>{ if(e.key==="Enter"||e.key===" "||e.key==="Escape"){ clearTimeout(autoTimer); goNext(); } });
+    addEventListener("click", ()=>{ /* first click after 1.2s skips */ if(performance.now()-START>1200){ clearTimeout(autoTimer); goNext(); } });
+  </script>
+</body>
+</html>

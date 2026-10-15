@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>BLACKBOX SERIES — Interactive Electronic Puzzles</title>
+  <style>
+    :root{
+      --bg:#050a07; --fg:#c7ffbf; --fg2:#88ff7d; --dim2:#2ce83a;
+      --grid2:rgba(70,255,130,.14); --warn:#ffe66a; --bad:#ff6a6a;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --radius:12px; --glow: 0 0 16px rgba(80,255,120,.16), 0 0 40px rgba(80,255,120,.08);
+    }
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    html, body{ overflow-x:hidden; }
+    body{
+      margin:0; font-family: var(--mono); color:var(--fg);
+      background: radial-gradient(1200px 900px at 20% 15%, rgba(70,255,130,.12), transparent 55%), radial-gradient(900px 700px at 85% 70%, rgba(70,255,130,.10), transparent 60%), linear-gradient(180deg, var(--bg), #020603 70%, #010302);
+      min-height:100%;
+    }
+    body::before{ content:""; position:fixed; inset:0; pointer-events:none; background: repeating-linear-gradient(180deg, rgba(120,255,160,.045) 0px, rgba(120,255,160,.045) 1px, rgba(0,0,0,.00) 2px, rgba(0,0,0,.00) 4px); mix-blend-mode: overlay; opacity:.55; z-index:2; animation: scanShift 8s linear infinite; }
+    @keyframes scanShift{ 0%{ background-position:0 0; } 100%{ background-position:0 100px; } }
+    body::after{ content:""; position:fixed; inset:-1px; pointer-events:none; background: radial-gradient(1200px 900px at 50% 40%, transparent 55%, rgba(0,0,0,.65) 100%), radial-gradient(900px 700px at 50% 50%, rgba(0,0,0,.0) 30%, rgba(0,0,0,.35) 100%); z-index:3; }
+    .flicker{ position:fixed; inset:0; z-index:4; pointer-events:none; background: rgba(120,255,160,.02); animation: flick 6s steps(2) infinite; mix-blend-mode:overlay; }
+    @keyframes flick{ 0%,96%,100%{ opacity:0; } 97%{ opacity:.5; } 98%{ opacity:.1; } 99%{ opacity:.7; } }
+    #matrix{ position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.10; }
+
+    .app{ position:relative; z-index:1; max-width:1180px; margin:0 auto; padding:14px 12px 40px; gap:10px; }
+
+    /* icons */
+    svg.icn{ width:22px; height:22px; fill:none; stroke: var(--fg2); stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
+    .badge svg.icn{ width:26px; height:26px; }
+
+    .topbar{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 10px; border:1px solid var(--grid2); border-radius: var(--radius); background: linear-gradient(180deg, rgba(10,28,18,.82), rgba(5,12,8,.75)); box-shadow: var(--glow); backdrop-filter: blur(4px); }
+    .brand{ display:flex; align-items:center; gap:10px; min-width: 300px; }
+    .logo{ width:34px; height:34px; border-radius:10px; border:1px solid rgba(120,255,160,.35); background: linear-gradient(180deg, rgba(20,60,34,.70), rgba(6,18,10,.55)); box-shadow: 0 0 0 1px rgba(70,255,130,.10) inset, 0 0 16px rgba(70,255,130,.10); position:relative; flex:0 0 auto; display:grid; place-items:center; }
+    .logo svg{ width:22px; height:22px; fill:none; stroke: var(--fg2); stroke-width:1.7; stroke-linejoin:round; stroke-linecap:round; filter: drop-shadow(0 0 5px rgba(90,255,130,.4)); animation: logospin 14s linear infinite; }
+    @keyframes logospin{ to{ transform: rotate(360deg); } }
+    .brandText{ display:flex; flex-direction:column; gap:2px; }
+    .brand h1{ margin:0; font-size:18px; letter-spacing:.22em; text-transform:uppercase; color:var(--fg2); text-shadow: 0 0 12px rgba(90,255,130,.22); line-height:1.1; }
+    .brand .sub{ font-size:11px; color:rgba(180,255,205,.72); letter-spacing:.08em; white-space:nowrap; line-height:1.1; }
+    .brand .cred{ font-size:10px; color:rgba(170,255,195,.60); letter-spacing:.08em; line-height:1.1; }
+    .brand .cred a{ color: rgba(190,255,210,.85); text-decoration:none; border-bottom:1px dotted rgba(120,255,160,.35); }
+    .brand .cred a:hover{ color: var(--fg2); border-bottom-color: rgba(120,255,160,.65); }
+    .navlinks{ display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; align-items:center; }
+    .navlinks a{ border:1px solid var(--grid2); background: rgba(0,0,0,.22); padding:6px 10px; border-radius:999px; font-size:11px; letter-spacing:.08em; color: rgba(200,255,215,.86); text-decoration:none; text-transform:uppercase; transition: border-color .15s ease, color .15s ease, filter .15s ease; white-space:nowrap; cursor:pointer; }
+    .navlinks a:hover{ border-color: rgba(120,255,160,.55); color: var(--fg2); filter:brightness(1.1); }
+
+    .glitchbar{ margin-top:12px; border:1px solid var(--grid2); border-radius: var(--radius); background: linear-gradient(90deg, rgba(7,17,12,.9), rgba(4,10,7,.7)); box-shadow: var(--glow); padding:11px 16px; display:flex; align-items:center; gap:12px; overflow:hidden; }
+    .glitchbar .tag{ font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#0a1a0f; background:var(--dim2); padding:3px 8px; border-radius:6px; font-weight:700; flex:0 0 auto; }
+    .glitch{ position:relative; font-size:13px; letter-spacing:.08em; color: var(--fg2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .glitch::before, .glitch::after{ content: attr(data-text); position:absolute; left:0; top:0; width:100%; overflow:hidden; }
+    .glitch::before{ color:#ff5b9e; z-index:-1; animation: gl1 2.6s infinite linear alternate; }
+    .glitch::after{ color:#5bd6ff; z-index:-2; animation: gl2 3.1s infinite linear alternate; }
+    @keyframes gl1{ 0%{clip-path:inset(0 0 82% 0); transform:translateX(-2px);} 50%{clip-path:inset(40% 0 40% 0);} 100%{clip-path:inset(75% 0 5% 0); transform:translateX(2px);} }
+    @keyframes gl2{ 0%{clip-path:inset(70% 0 8% 0); transform:translateX(2px);} 50%{clip-path:inset(20% 0 55% 0);} 100%{clip-path:inset(5% 0 80% 0); transform:translateX(-2px);} }
+
+    .hero{ margin-top:12px; border:1px solid var(--grid2); border-radius: var(--radius); background: linear-gradient(180deg, rgba(7,17,12,.86), rgba(4,10,7,.78)); box-shadow: var(--glow); overflow:hidden; position:relative; padding:40px 28px 34px; }
+    .hero::before{ content:""; position:absolute; inset:0; background: repeating-linear-gradient(90deg, transparent 0, transparent 30px, rgba(70,255,130,.06) 31px, transparent 32px), repeating-linear-gradient(0deg, transparent 0, transparent 30px, rgba(70,255,130,.05) 31px, transparent 32px); opacity:.35; pointer-events:none; }
+    .hero-inner{ position:relative; z-index:1; max-width:760px; }
+    .kicker{ font-size:11px; letter-spacing:.4em; text-transform:uppercase; color: rgba(170,255,195,.72); margin-bottom:14px; display:flex; align-items:center; gap:8px; }
+    .kicker .dot{ width:8px;height:8px;border-radius:50%; background: var(--dim2); box-shadow: 0 0 10px rgba(70,255,130,.6); animation: pulse 1.6s ease-in-out infinite; }
+    @keyframes pulse{ 0%,100%{ opacity:.35; } 50%{ opacity:1; } }
+    .hero h2{ margin:0 0 6px; font-size: clamp(26px, 5vw, 46px); line-height:1.05; letter-spacing:.06em; text-transform:uppercase; color: var(--fg2); text-shadow: 0 0 18px rgba(90,255,130,.25); }
+    .hero h2 .cursor{ display:inline-block; width:.6ch; background:var(--fg2); animation: blink 1s steps(1) infinite; margin-left:2px; box-shadow: 0 0 12px rgba(120,255,160,.5); }
+    @keyframes blink{ 50%{ opacity:0; } }
+    .hero p.lead{ font-size: 14px; line-height:1.7; color: rgba(200,255,215,.86); letter-spacing:.03em; max-width:640px; margin:16px 0 24px; }
+    .hero .cta{ display:flex; gap:12px; flex-wrap:wrap; }
+    .btn{ cursor:pointer; border:1px solid rgba(70,255,130,.30); background: linear-gradient(180deg, rgba(20,60,34,.65), rgba(6,18,10,.55)); color:var(--fg); padding:12px 18px; border-radius:10px; font-family: var(--mono); letter-spacing:.14em; text-transform:uppercase; font-size:12px; text-decoration:none; box-shadow: 0 0 0 1px rgba(70,255,130,.08) inset, 0 8px 24px rgba(0,0,0,.35); transition: transform .08s ease, border-color .15s ease, filter .15s ease; user-select:none; white-space:nowrap; display:inline-flex; align-items:center; gap:8px; }
+    .btn:hover{ border-color: rgba(120,255,160,.55); filter: brightness(1.08); }
+    .btn:active{ transform: translateY(1px); }
+    .btn.secondary{ background: rgba(0,0,0,.18); border-color: rgba(70,255,130,.18); color: rgba(200,255,215,.86); }
+    .btn svg{ width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+
+    .sectionTitle{ margin:34px 4px 12px; font-size:11px; letter-spacing:.3em; text-transform:uppercase; color:rgba(200,255,210,.82); display:flex; align-items:center; gap:12px; }
+    .sectionTitle::after{ content:""; flex:1; height:1px; background: linear-gradient(90deg, rgba(70,255,130,.3), transparent); }
+
+    .grid{ display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; }
+    @media (max-width: 860px){ .grid{ grid-template-columns:1fr 1fr; } }
+    @media (max-width: 560px){ .grid{ grid-template-columns:1fr; } }
+    .card{ border:1px solid var(--grid2); border-radius: var(--radius); background: linear-gradient(180deg, rgba(7,17,12,.86), rgba(4,10,7,.78)); box-shadow: var(--glow); overflow:hidden; position:relative; padding:16px 16px 18px; transition: transform .12s ease, border-color .15s ease; }
+    .card::before{ content:""; position:absolute; inset:0; background: repeating-linear-gradient(90deg, transparent 0, transparent 22px, rgba(70,255,130,.06) 23px, transparent 24px), repeating-linear-gradient(0deg, transparent 0, transparent 22px, rgba(70,255,130,.05) 23px, transparent 24px); opacity:.25; pointer-events:none; }
+    .card:hover{ transform: translateY(-3px); border-color: rgba(120,255,160,.4); }
+    .card .ic{ width:38px;height:38px;border-radius:9px; border:1px solid rgba(120,255,160,.3); display:grid;place-items:center; margin-bottom:12px; background: linear-gradient(180deg, rgba(20,60,34,.55), rgba(6,18,10,.4)); box-shadow: 0 0 14px rgba(70,255,130,.12); position:relative; z-index:1; }
+    .card h3{ margin:0 0 8px; font-size:13px; letter-spacing:.12em; text-transform:uppercase; color: var(--fg2); position:relative; z-index:1; }
+    .card p{ margin:0; font-size:12px; line-height:1.6; color: rgba(200,255,215,.78); position:relative; z-index:1; }
+
+    .modules{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    @media (max-width: 720px){ .modules{ grid-template-columns:1fr; } }
+    .module{ display:flex; align-items:center; gap:14px; border:1px solid var(--grid2); border-radius: var(--radius); background: linear-gradient(180deg, rgba(7,17,12,.86), rgba(4,10,7,.78)); box-shadow: var(--glow); padding:16px; text-decoration:none; color:var(--fg); position:relative; overflow:hidden; transition: transform .12s ease, border-color .15s ease; cursor:pointer; }
+    .module:hover{ transform: translateY(-2px); border-color: rgba(120,255,160,.45); }
+    .module .badge{ flex:0 0 auto; width:52px;height:52px;border-radius:10px; display:grid;place-items:center; border:1px solid rgba(120,255,160,.3); background: linear-gradient(180deg, rgba(20,60,34,.55), rgba(6,18,10,.4)); box-shadow: 0 0 16px rgba(70,255,130,.14); }
+    .module .mbody{ flex:1; min-width:0; }
+    .module .mtitle{ font-size:13px; letter-spacing:.1em; text-transform:uppercase; color:var(--fg2); display:flex; align-items:center; gap:8px; }
+    .module .mstatus{ font-size:10px; padding:2px 7px; border-radius:999px; border:1px solid var(--grid2); color: rgba(180,255,205,.7); letter-spacing:.08em; }
+    .module .mstatus.live{ color:#0a1a0f; background: var(--dim2); border-color: transparent; font-weight:700; }
+    .module .mstatus.pop{ color:#0a1a0f; background: var(--warn); border-color:transparent; font-weight:700; }
+    .module .mdesc{ font-size:11.5px; line-height:1.5; color: rgba(200,255,215,.72); margin-top:5px; }
+    .module .arrow{ font-size:18px; color: rgba(170,255,195,.55); transition: transform .15s ease, color .15s ease; }
+    .module:hover .arrow{ transform: translateX(4px); color: var(--fg2); }
+
+    .terminal{ border:1px solid var(--grid2); border-radius: var(--radius); background: rgba(0,0,0,.28); box-shadow: var(--glow); overflow:hidden; }
+    .termTop{ display:flex; justify-content:space-between; align-items:center; padding:9px 12px; border-bottom:1px solid rgba(70,255,130,.12); font-size:10px; letter-spacing:.18em; text-transform:uppercase; color: rgba(200,255,215,.78); }
+    .termTop .dots{ display:flex; gap:6px; }
+    .termTop .dots i{ width:9px;height:9px;border-radius:50%; display:inline-block; background: rgba(70,255,130,.4); }
+    .termBody{ padding:14px; font-size:12px; line-height:1.7; min-height:150px; color: rgba(190,255,210,.86); white-space:pre-wrap; }
+    .termBody .cm{ color: rgba(170,255,195,.55); }
+    .termBody .hl{ color: var(--fg2); }
+    .termBody .warn{ color: var(--warn); }
+    .termBody .cur{ display:inline-block; width:.6ch; background:var(--fg2); animation: blink 1s steps(1) infinite; }
+    .cmdline{ display:flex; align-items:center; gap:8px; margin-top:6px; }
+    .cmdline .prompt{ color: var(--fg2); font-size:12px; }
+    .cmdline input{ flex:1; background:transparent; border:0; outline:none; color:var(--fg); font-family:var(--mono); font-size:12px; letter-spacing:.04em; }
+
+    .lfsr-cells{ display:flex; gap:6px; flex-wrap:wrap; }
+    .bitcell{ width:34px; height:44px; border-radius:8px; border:1px solid rgba(70,255,130,.25); background: rgba(0,0,0,.28); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; font-size:16px; font-weight:700; cursor:pointer; user-select:none; transition: all .12s ease; position:relative; }
+    .bitcell.on{ color:#0a1a0f; background: var(--dim2); border-color:transparent; box-shadow: 0 0 12px rgba(70,255,130,.4); }
+    .bitcell:hover{ border-color: rgba(120,255,160,.6); }
+    .bitcell .idx{ font-size:8px; font-weight:400; opacity:.7; letter-spacing:.05em; }
+    .bitcell.tapon{ outline:2px solid var(--warn); outline-offset:1px; }
+    .bitcell .tapdot{ position:absolute; top:-8px; right:-5px; font-size:12px; color:var(--warn); text-shadow:0 0 6px rgba(255,230,106,.6); }
+    .lfsr-out{ font-size:12px; line-height:1.7; color: rgba(190,255,210,.86); background: rgba(0,0,0,.3); border:1px solid rgba(70,255,130,.14); border-radius:10px; padding:10px 12px; word-break:break-all; min-height:54px; }
+    .lfsr-out .k{ color: var(--fg2); }
+    .rowbtns{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .minibtn{ cursor:pointer; border:1px solid rgba(70,255,130,.3); background: linear-gradient(180deg, rgba(20,60,34,.6), rgba(6,18,10,.5)); color:var(--fg); padding:8px 12px; border-radius:9px; font-family:var(--mono); letter-spacing:.1em; text-transform:uppercase; font-size:11px; transition: filter .12s ease, border-color .12s ease; display:inline-flex; align-items:center; gap:6px; }
+    .minibtn:hover{ filter:brightness(1.1); border-color: rgba(120,255,160,.55); }
+    .minibtn.sec{ background: rgba(0,0,0,.2); border-color: rgba(70,255,130,.18); }
+    .minibtn.warn{ border-color: rgba(255,230,106,.4); color: var(--warn); }
+    .minibtn svg{ width:14px;height:14px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+    .field2{ display:grid; gap:6px; }
+    .field2 label{ font-size:10px; letter-spacing:.2em; text-transform:uppercase; color: rgba(200,255,215,.7); }
+    .inp{ width:100%; background: rgba(0,0,0,.3); border:1px solid rgba(70,255,130,.2); color:var(--fg); border-radius:9px; padding:8px 10px; outline:none; font-family:var(--mono); letter-spacing:.06em; font-size:12px; }
+    .inp:focus{ border-color: rgba(120,255,160,.55); box-shadow: 0 0 0 2px rgba(90,255,130,.12); }
+    select.inp{ appearance:none; -webkit-appearance:none; }
+    select.inp option{ background:#06120c; color:var(--fg); }
+    .cfgrow{ display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+    .hint{ font-size:10.5px; line-height:1.55; color:rgba(200,255,215,.62); }
+    .poly{ font-size:11px; color: var(--fg2); background:rgba(0,0,0,.25); border:1px solid rgba(70,255,130,.14); border-radius:8px; padding:6px 9px; }
+    .topowrap{ border:1px solid rgba(70,255,130,.16); border-radius:10px; background: rgba(0,0,0,.28); overflow-x:auto; }
+    .topowrap svg{ display:block; min-width:100%; filter: drop-shadow(0 0 8px rgba(70,255,130,.12)); }
+
+    .serial-log{ background: rgba(0,0,0,.34); border:1px solid rgba(70,255,130,.14); border-radius:10px; padding:10px 12px; height:220px; overflow:auto; font-size:11.5px; line-height:1.6; color: rgba(190,255,210,.85); white-space:pre-wrap; }
+    .serial-log .tx{ color: var(--fg2); }
+    .serial-log .rx{ color: #7dffcf; }
+    .serial-log .sys{ color: rgba(170,255,195,.55); }
+    .serial-log .err{ color: var(--bad); }
+    .serial-in{ display:flex; gap:8px; }
+    .serial-in .inp{ flex:1; }
+
+    /* modals */
+    .modal{ position:fixed; inset:0; z-index:20; display:none; align-items:center; justify-content:center; padding:20px; background: rgba(0,0,0,.62); backdrop-filter: blur(3px); }
+    .modal.show{ display:flex; animation: modalFade .2s ease; }
+    @keyframes modalFade{ from{ opacity:0; } to{ opacity:1; } }
+    .modalbox{ width:min(760px, 100%); max-height:88vh; display:flex; flex-direction:column; border:1px solid var(--grid2); border-radius:var(--radius); background: linear-gradient(180deg, rgba(9,20,13,.98), rgba(4,10,7,.98)); box-shadow: 0 30px 80px rgba(0,0,0,.6), var(--glow); overflow:hidden; animation: modalPop .22s cubic-bezier(.2,.8,.2,1); }
+    .modalbox.wide{ width:min(860px, 100%); }
+    @keyframes modalPop{ from{ transform: translateY(14px) scale(.98); opacity:0; } to{ transform:none; opacity:1; } }
+    .modalbox > header{ padding:12px 14px; border-bottom:1px solid rgba(70,255,130,.14); display:flex; justify-content:space-between; align-items:center; font-size:11px; letter-spacing:.18em; text-transform:uppercase; color: rgba(200,255,215,.85); }
+    .modalbox .mtitlerow{ display:flex; align-items:center; gap:10px; }
+    .modalbox .mtitlerow svg{ width:18px;height:18px; fill:none; stroke:var(--fg2); stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
+    .modalbox .mscroll{ overflow:auto; padding:14px; display:flex; flex-direction:column; gap:12px; }
+    .modalbox pre{ margin:0; padding:14px; overflow:auto; font-size:11.5px; line-height:1.55; color:#bff7cf; white-space:pre; }
+    .modalbox .mfoot{ padding:10px 14px; border-top:1px solid rgba(70,255,130,.14); display:flex; gap:8px; justify-content:flex-end; }
+    .statuschip{ font-size:10px; padding:2px 8px; border-radius:999px; border:1px solid var(--grid2); color: var(--warn); letter-spacing:.08em; }
+
+    .steps{ display:grid; grid-template-columns: repeat(3,1fr); gap:12px; }
+    @media (max-width: 760px){ .steps{ grid-template-columns:1fr; } }
+    .step{ border:1px solid var(--grid2); border-radius:var(--radius); background: linear-gradient(180deg, rgba(7,17,12,.8), rgba(4,10,7,.7)); padding:18px 16px; position:relative; overflow:hidden; }
+    .step .num{ font-size:34px; font-weight:700; color: rgba(120,255,160,.25); letter-spacing:.02em; line-height:1; }
+    .step h4{ margin:8px 0 6px; font-size:13px; letter-spacing:.1em; text-transform:uppercase; color:var(--fg2); }
+    .step p{ margin:0; font-size:12px; line-height:1.6; color: rgba(200,255,215,.76); }
+
+    .footer{ margin-top:36px; border-top:1px solid rgba(70,255,130,.12); padding:20px 6px 4px; display:flex; justify-content:space-between; gap:14px; flex-wrap:wrap; font-size:11px; color: rgba(170,255,195,.6); letter-spacing:.06em; }
+    .footer a{ color: rgba(190,255,210,.8); text-decoration:none; border-bottom:1px dotted rgba(120,255,160,.3); }
+    .footer a:hover{ color: var(--fg2); }
+
+    .toast{ position:fixed; left:50%; bottom:16px; transform: translateX(-50%); z-index:30; padding:10px 14px; border-radius:12px; border:1px solid rgba(70,255,130,.25); background: rgba(0,0,0,.6); color: rgba(210,255,225,.92); box-shadow: 0 18px 60px rgba(0,0,0,.45), var(--glow); font-size:12px; letter-spacing:.06em; opacity:0; pointer-events:none; transition: opacity .2s ease, transform .2s ease; }
+    .toast.show{ opacity:1; transform: translateX(-50%) translateY(-2px); }
+
+    ::-webkit-scrollbar{ width: 12px; height:12px; }
+    ::-webkit-scrollbar-track{ background: rgba(0,0,0,.22); border-left:1px solid rgba(70,255,130,.10); }
+    ::-webkit-scrollbar-thumb{ background: linear-gradient(180deg, rgba(70,255,130,.28), rgba(70,255,130,.16)); border:1px solid rgba(120,255,160,.28); border-radius: 999px; box-shadow: 0 0 10px rgba(70,255,130,.18); }
+    ::-webkit-scrollbar-thumb:hover{ background: linear-gradient(180deg, rgba(120,255,160,.35), rgba(70,255,130,.20)); }
+  </style>
+</head>
+<body>
+  <canvas id="matrix"></canvas>
+  <div class="flicker"></div>
+
+  <!-- reusable SVG icon symbols -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-cube" viewBox="0 0 24 24"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M3 7l9 5 9-5M12 12v10"/></symbol>
+      <symbol id="i-chip" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5"/><rect x="10" y="10" width="4" height="4"/><path d="M9 3v2M12 3v2M15 3v2M9 19v2M12 19v2M15 19v2M3 9h2M3 12h2M3 15h2M19 9h2M19 12h2M19 15h2"/></symbol>
+      <symbol id="i-plug" viewBox="0 0 24 24"><path d="M9 2v6M15 2v6"/><path d="M6 8h12v3a6 6 0 0 1-12 0z"/><path d="M12 17v5"/></symbol>
+      <symbol id="i-puzzle" viewBox="0 0 24 24"><path d="M10.5 3.5a1.5 1.5 0 0 1 3 0V5h3a1 1 0 0 1 1 1v3h1.5a1.5 1.5 0 0 1 0 3H17v3a1 1 0 0 1-1 1h-3v1.5a1.5 1.5 0 0 1-3 0V19H7a1 1 0 0 1-1-1v-3H4.5a1.5 1.5 0 0 1 0-3H6V6a1 1 0 0 1 1-1h3.5z"/></symbol>
+      <symbol id="i-term" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/></symbol>
+      <symbol id="i-wave" viewBox="0 0 24 24"><path d="M2 12h3l2-6 3 12 3-9 2 3h7"/></symbol>
+      <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5.5 5.5l2 2M16.5 16.5l2 2M18.5 5.5l-2 2M7.5 16.5l-2 2"/></symbol>
+      <symbol id="i-link" viewBox="0 0 24 24"><path d="M9 15l6-6"/><path d="M10.5 6l1-1a4 4 0 0 1 5.7 5.7l-1 1"/><path d="M13.5 18l-1 1a4 4 0 0 1-5.7-5.7l1-1"/></symbol>
+      <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
+      <symbol id="i-circuit" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M8 6h6a2 2 0 0 1 2 2v8M6 8v6a2 2 0 0 0 2 2h6"/></symbol>
+      <symbol id="i-antenna" viewBox="0 0 24 24"><path d="M12 12v9"/><path d="M8 8a5 5 0 0 1 8 0"/><path d="M5.5 5.5a9 9 0 0 1 13 0"/><circle cx="12" cy="11" r="1.4"/></symbol>
+      <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="8" r="4"/><path d="M11 11l7 7M16 16l2-2M18 18l2-2"/></symbol>
+      <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4l12 8-12 8z"/></symbol>
+    </defs>
+  </svg>
+
+  <div class="app">
+
+    <!-- TOPBAR -->
+    <div class="topbar">
+      <div class="brand">
+        <div class="logo" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#i-cube"/></svg></div>
+        <div class="brandText">
+          <h1>BLACKBOX</h1>
+          <div class="sub">series • interactive electronic puzzles</div>
+          <div class="cred">created by <a href="https://khatynkadynamics.github.io" target="_blank" rel="noopener noreferrer">khatynkadynamics.github.io</a></div>
+        </div>
+      </div>
+      <nav class="navlinks">
+        <a href="#modules">Modules</a>
+        <a data-open="lfsr">LFSR</a>
+        <a data-open="serial">Serial</a>
+        <a href="cpu.html">CPU</a>
+      </nav>
+    </div>
+
+    <!-- GLITCH PHRASE TICKER -->
+    <div class="glitchbar">
+      <span class="tag">// sys</span>
+      <span class="glitch" id="glitchPhrase" data-text="">&nbsp;</span>
+    </div>
+
+    <!-- HERO -->
+    <section class="hero">
+      <div class="hero-inner">
+        <div class="kicker"><span class="dot"></span> hardware &nbsp;×&nbsp; software &nbsp;×&nbsp; logic</div>
+        <h2>Build. Code.<br/>Solve the box.<span class="cursor" id="heroCur">&nbsp;</span></h2>
+        <p class="lead" id="leadText"></p>
+        <div class="cta">
+          <a class="btn" href="cpu2.1.html"><svg viewBox="0 0 24 24"><use href="#i-play"/></svg> Launch CPU Simulator</a>
+          <a class="btn secondary" data-open="lfsr" style="cursor:pointer"><svg viewBox="0 0 24 24"><use href="#i-lock"/></svg> Open LFSR Lab</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- FEATURES -->
+    <div class="sectionTitle">What is the Blackbox Series</div>
+    <div class="grid">
+      <div class="card"><div class="ic"><svg class="icn"><use href="#i-plug"/></svg></div><h3>Hardware Meets Code</h3><p>Each Blackbox pairs a physical circuit with programmable logic. Wire it, flash it, and watch your reasoning come alive on real signals.</p></div>
+      <div class="card"><div class="ic"><svg class="icn"><use href="#i-puzzle"/></svg></div><h3>Layered Challenges</h3><p>Puzzles stack from single gates to full state machines. Solve one layer to unlock the next — no hand-holding, just clues in the signals.</p></div>
+      <div class="card"><div class="ic"><svg class="icn"><use href="#i-term"/></svg></div><h3>Learn by Doing</h3><p>Pick up electronics fundamentals and embedded programming through play: bits, timing, registers, and assembly — one tick at a time.</p></div>
+      <div class="card"><div class="ic"><svg class="icn"><use href="#i-wave"/></svg></div><h3>See the Signals</h3><p>Live waveform scopes and I/O line viewers turn abstract logic into something you can watch, debug, and finally understand.</p></div>
+      <div class="card"><div class="ic"><svg class="icn"><use href="#i-gear"/></svg></div><h3>Tiny, Honest ISA</h3><p>A minimal 1-bit instruction set keeps everything transparent. No magic — just <span style="color:var(--fg2)">IN</span>, <span style="color:var(--fg2)">XOR</span>, <span style="color:var(--fg2)">OUT</span>, <span style="color:var(--fg2)">TICK</span>, and your own ideas.</p></div>
+      <div class="card"><div class="ic"><svg class="icn"><use href="#i-cube"/></svg></div><h3>Fully Offline</h3><p>Every tool is a single self-contained file. No installs, no accounts, no cloud — open it in a browser and start hacking.</p></div>
+    </div>
+
+    <!-- MODULES -->
+    <div class="sectionTitle" id="modules">Modules & Tools</div>
+    <div class="modules">
+      <a class="module" href="cpu2.1.html">
+        <div class="badge"><svg class="icn"><use href="#i-chip"/></svg></div>
+        <div class="mbody"><div class="mtitle">CPU Simulator <span class="mstatus live">LIVE</span></div><div class="mdesc">Program a 1-bit black-box CPU in a custom assembly language and watch A, B → OUT on a real-time waveform scope.</div></div>
+        <div class="arrow">→</div>
+      </a>
+      <a class="module" data-open="serial">
+        <div class="badge"><svg class="icn"><use href="#i-link"/></svg></div>
+        <div class="mbody"><div class="mtitle">Serial Console <span class="mstatus live">LIVE</span></div><div class="mdesc">Talk to other Blackbox modules over Web Serial (USB/UART). Opens in a window — send commands and stream telemetry.</div></div>
+        <div class="arrow">→</div>
+      </a>
+      <a class="module" data-open="lfsr">
+        <div class="badge"><svg class="icn"><use href="#i-lock"/></svg></div>
+        <div class="mbody"><div class="mtitle">LFSR Cipher <span class="mstatus live">LIVE</span></div><div class="mdesc">Configurable shift register with live topology schematic and Verilog FPGA export. Opens in its own window.</div></div>
+        <div class="arrow">→</div>
+      </a>
+      <a class="module" href="#">
+        <div class="badge"><svg class="icn"><use href="#i-circuit"/></svg></div>
+        <div class="mbody"><div class="mtitle">Logic Lab <span class="mstatus">SOON</span></div><div class="mdesc">Drag-and-drop gates and flip-flops to prototype circuits before you commit them to the physical board.</div></div>
+        <div class="arrow">→</div>
+      </a>
+      <a class="module" href="#">
+        <div class="badge"><svg class="icn"><use href="#i-antenna"/></svg></div>
+        <div class="mbody"><div class="mtitle">Signal Decoder <span class="mstatus">SOON</span></div><div class="mdesc">Capture and decode the mysterious pulse trains each Blackbox emits — reverse-engineer the protocol to advance.</div></div>
+        <div class="arrow">→</div>
+      </a>
+      <a class="module" href="#">
+        <div class="badge"><svg class="icn"><use href="#i-key"/></svg></div>
+        <div class="mbody"><div class="mtitle">Cipher Vault <span class="mstatus">SOON</span></div><div class="mdesc">Layered cryptographic puzzles hidden in firmware. Crack the sequence to disarm the box and unlock the finale.</div></div>
+        <div class="arrow">→</div>
+      </a>
+    </div>
+
+    <!-- SYSTEM BOOT TERMINAL -->
+    <div class="sectionTitle">System Boot</div>
+    <div class="terminal">
+      <div class="termTop"><span>blackbox@core:~</span><span class="dots"><i></i><i></i><i></i></span></div>
+      <div class="termBody" id="bootLog"></div>
+      <div style="padding:0 14px 14px">
+        <div class="cmdline">
+          <span class="prompt">blackbox#</span>
+          <input id="termInput" type="text" spellcheck="false" placeholder="type 'help' and press enter…" autocomplete="off" />
+        </div>
+      </div>
+    </div>
+
+    <!-- HOW IT WORKS -->
+    <div class="sectionTitle" id="how">How it works</div>
+    <div class="steps">
+      <div class="step"><div class="num">01</div><h4>Build the Circuit</h4><p>Assemble the Blackbox hardware — connect inputs, outputs, and the logic core following the module guide.</p></div>
+      <div class="step"><div class="num">02</div><h4>Write the Logic</h4><p>Program the behavior in the tiny assembly ISA. Test it instantly in the CPU Simulator before flashing.</p></div>
+      <div class="step"><div class="num">03</div><h4>Solve & Unlock</h4><p>Feed the right signals, watch the output, and crack each layer to reveal the next stage of the puzzle.</p></div>
+    </div>
+
+    <!-- FOOTER -->
+    <div class="footer" id="footer">
+      <div>BLACKBOX SERIES • blackbox core terminal • v2.1 <span style="color:var(--fg2)">●</span> ARMED</div>
+      <div>created by <a href="https://khatynkadynamics.github.io" target="_blank" rel="noopener noreferrer">khatynkadynamics.github.io</a> · <a href="cpu.html">CPU</a></div>
+    </div>
+  </div>
+
+  <!-- ============ LFSR POPUP ============ -->
+  <div class="modal" id="lfsrModal">
+    <div class="modalbox wide">
+      <header>
+        <span class="mtitlerow"><svg viewBox="0 0 24 24"><use href="#i-lock"/></svg> LFSR Stream Cipher</span>
+        <span style="display:flex;gap:10px;align-items:center;">
+          <span id="lfsrClk" style="color:rgba(170,255,195,.55);font-size:10px;">CLK 0</span>
+          <button class="minibtn sec" data-close="lfsr">✕ Close</button>
+        </span>
+      </header>
+      <div class="mscroll">
+        <div class="cfgrow">
+          <div class="field2">
+            <label for="lfsrLen">Length (bits)</label>
+            <select class="inp" id="lfsrLen">
+              <option>4</option><option>5</option><option>6</option><option>7</option>
+              <option selected>8</option><option>9</option><option>10</option>
+              <option>11</option><option>12</option><option>13</option>
+              <option>14</option><option>15</option><option>16</option>
+            </select>
+          </div>
+          <div class="field2">
+            <label for="lfsrType">Topology</label>
+            <select class="inp" id="lfsrType">
+              <option value="fib" selected>Fibonacci (external XOR)</option>
+              <option value="gal">Galois (internal XOR)</option>
+            </select>
+          </div>
+        </div>
+        <div class="field2">
+          <label for="lfsrTaps">Feedback taps (comma list, 1-based) — or click ⊕ on a cell</label>
+          <input class="inp" id="lfsrTaps" type="text" value="8,6,5,4" spellcheck="false" />
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <span class="poly" id="lfsrPoly">poly: —</span>
+          <span class="poly" id="lfsrPeriod">period: —</span>
+        </div>
+        <div class="hint">Click a cell body to flip its <b>seed</b> bit. Click the ⊕ badge (top-right of a cell) or right-click a cell to toggle that <b>tap</b>. A maximal-length polynomial cycles through all 2ⁿ−1 states.</div>
+        <div class="lfsr-cells" id="lfsrCells"></div>
+        <div class="topowrap"><svg id="lfsrTopo" height="140" preserveAspectRatio="xMinYMid meet"></svg></div>
+        <div class="rowbtns">
+          <button class="minibtn" id="lfsrStep"><svg viewBox="0 0 24 24"><use href="#i-play"/></svg> Clock</button>
+          <button class="minibtn sec" id="lfsrRun">⏩ Run</button>
+          <button class="minibtn sec" id="lfsrReset">⟲ Reset</button>
+          <button class="minibtn sec" id="lfsrMax">✦ Maximal</button>
+          <button class="minibtn warn" id="lfsrVerilog">⬇ Export Verilog</button>
+        </div>
+        <div class="field2">
+          <label for="lfsrMsg">Plaintext (ASCII) → XOR keystream</label>
+          <input class="inp" id="lfsrMsg" type="text" value="ACCESS" spellcheck="false" />
+        </div>
+        <div class="lfsr-out" id="lfsrOut"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SERIAL POPUP ============ -->
+  <div class="modal" id="serialModal">
+    <div class="modalbox">
+      <header>
+        <span class="mtitlerow"><svg viewBox="0 0 24 24"><use href="#i-link"/></svg> Web Serial Console</span>
+        <span style="display:flex;gap:10px;align-items:center;">
+          <span class="statuschip" id="serialStatus">DEMO</span>
+          <button class="minibtn sec" data-close="serial">✕ Close</button>
+        </span>
+      </header>
+      <div class="mscroll">
+        <div class="rowbtns">
+          <button class="minibtn" id="serialConnect">⚡ Connect Port</button>
+          <button class="minibtn sec" id="serialDemo">▶ Demo Stream</button>
+          <button class="minibtn sec" id="serialClear">⌫ Clear</button>
+        </div>
+        <div class="serial-log" id="serialLog"></div>
+        <div class="serial-in">
+          <input class="inp" id="serialCmd" type="text" placeholder="type command… PING / ID? / SCAN / LFSR?" spellcheck="false" />
+          <button class="minibtn" id="serialSend">Send</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VERILOG MODAL -->
+  <div class="modal" id="vModal">
+    <div class="modalbox">
+      <header><span class="mtitlerow"><svg viewBox="0 0 24 24"><use href="#i-lock"/></svg> Verilog Export — lfsr.v</span><button class="minibtn sec" data-close="v">✕ Close</button></header>
+      <pre id="vCode"></pre>
+      <div class="mfoot">
+        <button class="minibtn sec" id="vCopy">⧉ Copy</button>
+        <button class="minibtn warn" id="vDownload">⬇ Download .v</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast">…</div>
+
+  <script>
+    const $ = s => document.querySelector(s);
+    function toast(msg){ const el=$("#toast"); el.textContent=msg; el.classList.add("show"); clearTimeout(toast._t); toast._t=setTimeout(()=>el.classList.remove("show"),1500); }
+
+    /* ---- modal open/close ---- */
+    const MODAL={ lfsr:"#lfsrModal", serial:"#serialModal", v:"#vModal" };
+    function openModal(k){ const m=$(MODAL[k]); if(m) m.classList.add("show"); }
+    function closeModal(k){ const m=$(MODAL[k]); if(m) m.classList.remove("show"); }
+    document.querySelectorAll("[data-open]").forEach(el=> el.addEventListener("click", e=>{ e.preventDefault(); openModal(el.getAttribute("data-open")); }));
+    document.querySelectorAll("[data-close]").forEach(el=> el.addEventListener("click", ()=> closeModal(el.getAttribute("data-close"))));
+    document.querySelectorAll(".modal").forEach(m=> m.addEventListener("click", e=>{ if(e.target===m) m.classList.remove("show"); }));
+    addEventListener("keydown", e=>{ if(e.key==="Escape") document.querySelectorAll(".modal.show").forEach(m=>m.classList.remove("show")); });
+
+    /* ---- matrix rain ---- */
+    (function(){
+      const cv=$("#matrix"), ctx=cv.getContext("2d");
+      const glyphs="01ABCDEF⊕⊗▚▞░▓<>/\\|=+-*ΞΛΣ".split("");
+      let cols, drops, fs=14;
+      function resize(){ cv.width=innerWidth; cv.height=innerHeight; cols=Math.floor(cv.width/fs); drops=Array(cols).fill(0).map(()=>Math.random()*cv.height/fs); }
+      resize(); addEventListener("resize", resize);
+      (function draw(){
+        ctx.fillStyle="rgba(5,10,7,.16)"; ctx.fillRect(0,0,cv.width,cv.height); ctx.font=fs+"px monospace";
+        for(let i=0;i<cols;i++){ const ch=glyphs[Math.random()*glyphs.length|0], x=i*fs, y=drops[i]*fs;
+          ctx.fillStyle=Math.random()<0.03?"rgba(190,255,210,.9)":"rgba(70,255,130,.55)"; ctx.fillText(ch,x,y);
+          if(y>cv.height && Math.random()>0.975) drops[i]=0; drops[i]+=0.5+Math.random()*0.5; }
+        requestAnimationFrame(draw);
+      })();
+    })();
+
+    /* ---- typewriter lead ---- */
+    (function(){
+      const s="An interactive electronic puzzle project that unites hardware and software. Build the circuit, write the code, and solve layered challenges — learning electronics and embedded programming as you go.";
+      const el=$("#leadText"); let i=0;
+      (function t(){ if(i<=s.length){ el.textContent=s.slice(0,i); i++; setTimeout(t,16); } })();
+    })();
+
+    /* ---- glitch phrases ---- */
+    (function(){
+      const P=["ACCESS GRANTED :: welcome to the machine","the box only opens for those who read the signals","trust no clock you did not tick yourself","root@blackbox :: privilege escalation complete","every bit hides a door — XOR to open it","keystream nominal :: entropy pool armed","sniffing UART @ 115200 baud … carrier detected","puzzle layer 03 unlocked :: proceed operator","if it computes, it can be broken","we do not fear the black box — we become it"];
+      const el=$("#glitchPhrase"); let idx=0;
+      function scramble(target,done){ const chars="!<>-_\\/[]{}=+*01ABCDEFΞΛΣ"; let f=0; const dur=16;
+        const from=el.getAttribute("data-text")||""; const len=Math.max(from.length,target.length);
+        const tm=setInterval(()=>{ let o=""; for(let i=0;i<len;i++){ o += (i<f/dur*len)?(target[i]||""):chars[Math.random()*chars.length|0]; }
+          el.textContent=o; el.setAttribute("data-text",o); f++;
+          if(f>dur){ clearInterval(tm); el.textContent=target; el.setAttribute("data-text",target); done&&done(); } },22); }
+      (function next(){ scramble(P[idx],()=>setTimeout(()=>{ idx=(idx+1)%P.length; next(); },2600)); })();
+    })();
+
+    /* ================= LFSR MODULE ================= */
+    const LFSR = (function(){
+      let N=8, type="fib";
+      let taps=[8,6,5,4];
+      let reg=[]; let clk=0, keystream=[], runTimer=null;
+      const cellsEl=$("#lfsrCells"), outEl=$("#lfsrOut"), clkEl=$("#lfsrClk");
+      const tapsInp=$("#lfsrTaps"), lenSel=$("#lfsrLen"), typeSel=$("#lfsrType");
+      const polyEl=$("#lfsrPoly"), periodEl=$("#lfsrPeriod"), topo=$("#lfsrTopo");
+
+      function defaultSeed(){ reg=Array(N).fill(0); reg[0]=1; }
+      function sanitizeTaps(){ taps=taps.filter(t=>t>=1&&t<=N); taps=[...new Set(taps)].sort((a,b)=>a-b); if(!taps.length) taps=[N]; if(!taps.includes(N)){ taps.push(N); taps.sort((a,b)=>a-b);} }
+      function polyString(){ return taps.map(t=>`x^${t}`).concat(["1"]).join(" + "); }
+      function measurePeriod(limit){ limit=limit||Math.min(Math.pow(2,N)+2,200000); const save=reg.slice(), sc=clk, sk=keystream.slice(); const start=reg.join(""); let p=0; for(let i=0;i<limit;i++){ shift(false); p++; if(reg.join("")===start) break; } reg=save; clk=sc; keystream=sk; return p; }
+      function shift(record=true){
+        let outBit;
+        if(type==="fib"){ const fb=taps.reduce((a,t)=>a^reg[t-1],0); outBit=reg[N-1]; reg=[fb,...reg.slice(0,N-1)]; }
+        else { outBit=reg[N-1]; const nr=new Array(N); nr[0]=outBit; for(let i=1;i<N;i++) nr[i]=reg[i-1]^(taps.includes(i)?outBit:0); reg=nr; }
+        if(record){ keystream.push(outBit); if(keystream.length>96) keystream.shift(); clk++; }
+        return outBit;
+      }
+      function renderCells(){
+        cellsEl.innerHTML="";
+        for(let i=0;i<N;i++){ const stage=i+1; const d=document.createElement("div"); const isTap=taps.includes(stage);
+          d.className="bitcell"+(reg[i]?" on":"")+(isTap?" tapon":"");
+          d.innerHTML=`<span class="tapdot">${isTap?"⊕":""}</span>${reg[i]}<span class="idx">s${stage}</span>`;
+          d.onclick=()=>{ reg[i]^=1; syncFromReg(); };
+          d.querySelector(".tapdot").onclick=(e)=>{ e.stopPropagation(); toggleTap(stage); };
+          d.oncontextmenu=(e)=>{ e.preventDefault(); toggleTap(stage); };
+          cellsEl.appendChild(d); }
+      }
+      function toggleTap(stage){ if(taps.includes(stage)) taps=taps.filter(t=>t!==stage); else taps.push(stage); sanitizeTaps(); tapsInp.value=taps.join(","); refreshMeta(); renderCells(); drawTopo(); }
+      function syncFromReg(){ if(reg.every(b=>!b)) reg[0]=1; renderCells(); drawTopo(); updateOut(); clkEl.textContent="CLK "+clk; }
+      function refreshMeta(){ polyEl.textContent="poly: "+polyString(); const per=measurePeriod(), max=Math.pow(2,N)-1; periodEl.textContent="period: "+per+" / "+max+(per===max?" ✦MAX":""); periodEl.style.color=per===max?"var(--dim2)":"rgba(170,255,195,.7)"; }
+
+      function drawTopo(){
+        const boxW=44, gap=26, padL=20, padR=20, y=64, boxH=34;
+        const totalW=padL+N*boxW+(N-1)*gap+padR;
+        topo.setAttribute("viewBox",`0 0 ${totalW} 140`); topo.setAttribute("width",Math.max(totalW,420));
+        const NS="http://www.w3.org/2000/svg"; while(topo.firstChild) topo.removeChild(topo.firstChild);
+        const mk=(t,a)=>{ const e=document.createElementNS(NS,t); for(const k in a) e.setAttribute(k,a[k]); return e; };
+        const stroke="rgba(120,255,160,.7)", dim="rgba(120,255,160,.35)";
+        const cx=[];
+        for(let i=0;i<N;i++){ const x=padL+i*(boxW+gap); cx.push(x+boxW/2); const on=reg[i];
+          topo.appendChild(mk("rect",{x, y:y-boxH/2, width:boxW, height:boxH, rx:6, fill:on?"rgba(44,232,58,.22)":"rgba(0,0,0,.3)", stroke:on?"var(--dim2)":stroke, "stroke-width":1.4}));
+          const tx=mk("text",{x:x+boxW/2, y:y+5, "text-anchor":"middle","font-size":15,"font-family":"monospace",fill:on?"#c7ffbf":"rgba(200,255,215,.8)","font-weight":700}); tx.textContent=reg[i]; topo.appendChild(tx);
+          const lb=mk("text",{x:x+boxW/2, y:y+boxH/2+16,"text-anchor":"middle","font-size":10,"font-family":"monospace",fill:"rgba(170,255,195,.6)"}); lb.textContent="Q"+(i+1); topo.appendChild(lb);
+          if(i<N-1){ const x2=padL+(i+1)*(boxW+gap); topo.appendChild(mk("line",{x1:x+boxW,y1:y,x2:x2,y2:y,stroke:stroke,"stroke-width":1.6,"marker-end":"url(#arr)"})); } }
+        const defs=mk("defs",{}); const marker=mk("marker",{id:"arr",markerWidth:8,markerHeight:8,refX:7,refY:4,orient:"auto"}); marker.appendChild(mk("path",{d:"M0,0 L8,4 L0,8 Z",fill:stroke})); defs.appendChild(marker); topo.appendChild(defs);
+        const rightX=padL+(N-1)*(boxW+gap)+boxW, leftX=padL;
+        if(type==="fib"){
+          const gx=rightX+34, gy=y, busY=18;
+          topo.appendChild(mk("line",{x1:rightX,y1:y,x2:gx-16,y2:gy,stroke:stroke,"stroke-width":1.6}));
+          topo.appendChild(mk("circle",{cx:gx,cy:gy,r:14,fill:"rgba(0,0,0,.35)",stroke:"var(--warn)","stroke-width":1.6}));
+          const xo=mk("text",{x:gx,y:gy+5,"text-anchor":"middle","font-size":15,"font-family":"monospace",fill:"var(--warn)","font-weight":700}); xo.textContent="⊕"; topo.appendChild(xo);
+          topo.appendChild(mk("line",{x1:leftX-8,y1:busY,x2:gx,y2:busY,stroke:dim,"stroke-width":1.2,"stroke-dasharray":"4 4"}));
+          taps.forEach(t=>{ const bx=cx[t-1]; topo.appendChild(mk("line",{x1:bx,y1:y-boxH/2,x2:bx,y2:busY,stroke:"var(--warn)","stroke-width":1.3})); topo.appendChild(mk("circle",{cx:bx,cy:busY,r:2.4,fill:"var(--warn)"})); });
+          topo.appendChild(mk("line",{x1:gx,y1:gy-14,x2:gx,y2:busY,stroke:"var(--warn)","stroke-width":1.4}));
+          topo.appendChild(mk("line",{x1:leftX-8,y1:busY,x2:leftX-8,y2:y,stroke:stroke,"stroke-width":1.6}));
+          topo.appendChild(mk("line",{x1:leftX-8,y1:y,x2:leftX,y2:y,stroke:stroke,"stroke-width":1.6,"marker-end":"url(#arr)"}));
+          topo.appendChild(mk("line",{x1:rightX,y1:y,x2:rightX,y2:y+42,stroke:"#7dffcf","stroke-width":1.4}));
+          const ks=mk("text",{x:rightX+4,y:y+46,"font-size":10,"font-family":"monospace",fill:"#7dffcf"}); ks.textContent="keystream"; topo.appendChild(ks);
+        } else {
+          const busY=18, fbFromX=rightX, fbToX=leftX;
+          topo.appendChild(mk("line",{x1:fbFromX,y1:y,x2:fbFromX,y2:busY,stroke:"var(--warn)","stroke-width":1.6}));
+          topo.appendChild(mk("line",{x1:fbFromX,y1:busY,x2:fbToX-8,y2:busY,stroke:"var(--warn)","stroke-width":1.6}));
+          topo.appendChild(mk("line",{x1:fbToX-8,y1:busY,x2:fbToX-8,y2:y,stroke:stroke,"stroke-width":1.6}));
+          topo.appendChild(mk("line",{x1:fbToX-8,y1:y,x2:fbToX,y2:y,stroke:stroke,"stroke-width":1.6,"marker-end":"url(#arr)"}));
+          taps.filter(t=>t<N).forEach(t=>{ const bx=(cx[t-1]+cx[t])/2;
+            topo.appendChild(mk("circle",{cx:bx,cy:y,r:11,fill:"rgba(0,0,0,.4)",stroke:"var(--warn)","stroke-width":1.4}));
+            const xo=mk("text",{x:bx,y:y+5,"text-anchor":"middle","font-size":13,"font-family":"monospace",fill:"var(--warn)","font-weight":700}); xo.textContent="⊕"; topo.appendChild(xo);
+            topo.appendChild(mk("line",{x1:bx,y1:busY,x2:bx,y2:y-11,stroke:"var(--warn)","stroke-width":1.2})); topo.appendChild(mk("circle",{cx:bx,cy:busY,r:2.4,fill:"var(--warn)"})); });
+          topo.appendChild(mk("line",{x1:rightX,y1:y,x2:rightX,y2:y+42,stroke:"#7dffcf","stroke-width":1.4}));
+          const ks=mk("text",{x:rightX+4,y:y+46,"font-size":10,"font-family":"monospace",fill:"#7dffcf"}); ks.textContent="keystream"; topo.appendChild(ks);
+        }
+      }
+      function updateOut(){
+        const msg=$("#lfsrMsg").value||""; const ksStr=keystream.slice(-40).join("")||"—"; let cipherHex="";
+        for(let i=0;i<msg.length;i++){ const bitsSlice=keystream.slice(-(8*(msg.length-i))).slice(0,8); const kbyte=parseInt((bitsSlice.join("")||"0").padEnd(8,"0"),2)||(0x5A+i); const c=msg.charCodeAt(i)^(kbyte&0xFF); cipherHex+=c.toString(16).padStart(2,"0").toUpperCase()+" "; }
+        outEl.innerHTML="<span class='k'>keystream</span> …"+ksStr+"<br><span class='k'>cipher</span> "+(cipherHex.trim()||"—");
+      }
+      function rebuild(){ N=parseInt(lenSel.value,10); type=typeSel.value; taps=(tapsInp.value.match(/\d+/g)||[]).map(Number); sanitizeTaps(); tapsInp.value=taps.join(","); defaultSeed(); clk=0; keystream=[]; for(let i=0;i<Math.min(16,N*2);i++) shift(); clk=0; renderCells(); drawTopo(); refreshMeta(); updateOut(); clkEl.textContent="CLK "+clk; }
+      function findMaximal(){ const M={4:[4,3],5:[5,3],6:[6,5],7:[7,6],8:[8,6,5,4],9:[9,5],10:[10,7],11:[11,9],12:[12,11,10,4],13:[13,12,11,8],14:[14,13,12,2],15:[15,14],16:[16,15,13,4]}; if(M[N]){ taps=M[N].slice(); sanitizeTaps(); tapsInp.value=taps.join(","); } defaultSeed(); clk=0; keystream=[]; for(let i=0;i<Math.min(16,N*2);i++) shift(); clk=0; renderCells(); drawTopo(); refreshMeta(); updateOut(); clkEl.textContent="CLK "+clk; toast("maximal-length polynomial loaded"); }
+      function verilog(){
+        const tapList=taps.slice().sort((a,b)=>a-b); const polyC=tapList.map(t=>`x^${t}`).concat("1").join(" + ");
+        const seedBits=reg.slice().reverse().map(b=>b).join(""); const seedHex="'h"+parseInt(seedBits||"0",2).toString(16).toUpperCase().padStart(Math.ceil(N/4),"0");
+        let fb; if(type==="fib") fb=tapList.map(t=>`q[${t-1}]`).join(" ^ ");
+        const L=[]; L.push(`// =====================================================`); L.push(`// BLACKBOX SERIES  —  LFSR keystream generator`); L.push(`// Auto-generated Verilog (synthesizable, FPGA-ready)`); L.push(`// Length     : ${N} bits`); L.push(`// Topology   : ${type==="fib"?"Fibonacci (external XOR)":"Galois (internal XOR)"}`); L.push(`// Taps       : ${tapList.join(", ")}   (1-based stages)`); L.push(`// Polynomial : ${polyC}`); L.push(`// Seed       : ${seedHex}  (must be non-zero)`); L.push(`// =====================================================`); L.push(``);
+        L.push(`module lfsr_${type} #(`); L.push(`    parameter WIDTH = ${N},`); L.push(`    parameter [WIDTH-1:0] SEED = ${N}${seedHex}`); L.push(`)(`); L.push(`    input  wire                 clk,`); L.push(`    input  wire                 rst_n,   // async active-low reset`); L.push(`    input  wire                 en,      // clock enable`); L.push(`    output wire                 ks_bit,  // keystream output bit`); L.push(`    output wire [WIDTH-1:0]     state    // full register state`); L.push(`);`); L.push(`    reg [WIDTH-1:0] q;`); L.push(`    assign state  = q;`); L.push(`    assign ks_bit = q[WIDTH-1];`); L.push(``);
+        if(type==="fib"){ L.push(`    // Fibonacci feedback: XOR of tap stages`); L.push(`    wire feedback = ${fb};`); L.push(``); L.push(`    always @(posedge clk or negedge rst_n) begin`); L.push(`        if (!rst_n)      q <= SEED;`); L.push(`        else if (en)     q <= {q[WIDTH-2:0], feedback};`); L.push(`    end`); }
+        else { const maskBits=[]; for(let i=1;i<=N;i++) maskBits.unshift(tapList.includes(i)&&i<N?"1":"0"); const maskHex="'h"+parseInt(maskBits.join(""),2).toString(16).toUpperCase().padStart(Math.ceil(N/4),"0"); L.push(`    // Galois feedback: TAP_MASK marks stages that get XORed`); L.push(`    localparam [WIDTH-1:0] TAP_MASK = ${N}${maskHex};`); L.push(``); L.push(`    wire msb = q[WIDTH-1];`); L.push(`    always @(posedge clk or negedge rst_n) begin`); L.push(`        if (!rst_n)   q <= SEED;`); L.push(`        else if (en)  q <= ({q[WIDTH-2:0], 1'b0}) ^ (msb ? {TAP_MASK[WIDTH-2:0],1'b1} : {WIDTH{1'b0}});`); L.push(`    end`); }
+        L.push(`endmodule`); return L.join("\n");
+      }
+      $("#lfsrStep").onclick=()=>{ shift(); syncFromReg(); clkEl.textContent="CLK "+clk; };
+      $("#lfsrRun").onclick=(e)=>{ if(runTimer){ clearInterval(runTimer); runTimer=null; e.target.textContent="⏩ Run"; } else { runTimer=setInterval(()=>{ shift(); syncFromReg(); clkEl.textContent="CLK "+clk; },170); e.target.textContent="⏸ Stop"; } };
+      $("#lfsrReset").onclick=()=>{ defaultSeed(); clk=0; keystream=[]; syncFromReg(); clkEl.textContent="CLK "+clk; toast("register reset"); };
+      $("#lfsrMax").onclick=findMaximal;
+      lenSel.onchange=rebuild; typeSel.onchange=rebuild; tapsInp.addEventListener("change",rebuild); $("#lfsrMsg").addEventListener("input",updateOut);
+      $("#lfsrVerilog").onclick=()=>{ $("#vCode").textContent=verilog(); openModal("v"); };
+      $("#vCopy").onclick=async()=>{ try{ await navigator.clipboard.writeText($("#vCode").textContent); toast("Verilog copied"); }catch{ toast("copy failed"); } };
+      $("#vDownload").onclick=()=>{ const blob=new Blob([$("#vCode").textContent],{type:"text/plain"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`lfsr_${type}_${N}bit.v`; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); toast("lfsr.v downloaded"); };
+      rebuild();
+      return { getKeystream:()=>keystream.slice(), info:()=>({N,type,taps:taps.slice()}) };
+    })();
+
+    /* ================= SERIAL CONSOLE ================= */
+    (function(){
+      const logEl=$("#serialLog"), statusEl=$("#serialStatus");
+      let port=null, writer=null, demoTimer=null;
+      function log(t,c){ const d=document.createElement("div"); d.className=c||""; d.textContent=t; logEl.appendChild(d); logEl.scrollTop=logEl.scrollHeight; }
+      log("blackbox serial bridge v1.2 — ready","sys");
+      log("Web Serial: "+("serial" in navigator?"supported ✓":"not available (use demo)"),"sys");
+      const FW={ "PING":()=>"PONG t="+Date.now()%100000,"ID?":()=>"BLACKBOX-CORE rev2.1 sn:0xC0FFEE","SCAN":()=>"modules: [CPU, LFSR, SERIAL] 1 live 3 pending","HELP":()=>"cmds: PING ID? SCAN STATUS LFSR? ARM DISARM REBOOT","STATUS":()=>"V=3.30 T=41C UART=115200 SEC=ARMED","LFSR?":()=>{ const i=LFSR.info(); return `LFSR n=${i.N} ${i.type} taps=[${i.taps.join(",")}] ks=…${LFSR.getKeystream().slice(-16).join("")}`; },"ARM":()=>"security armed","DISARM":()=>"security disarmed","REBOOT":()=>"…rebooting core…  OK" };
+      function respond(cmd){ const k=cmd.trim().toUpperCase(), fn=FW[k]; setTimeout(()=>log("< "+(fn?fn():"ERR unknown cmd '"+cmd+"'"),fn?"rx":"err"),160); }
+      function send(cmd){ if(!cmd.trim())return; log("> "+cmd,"tx"); if(writer){ try{ writer.write(new TextEncoder().encode(cmd+"\n")); }catch{} } else respond(cmd); }
+      async function connect(){ if(!("serial" in navigator)){ log("! Web Serial unsupported in this browser","err"); return; } try{ port=await navigator.serial.requestPort(); await port.open({baudRate:115200}); writer=port.writable.getWriter(); statusEl.textContent="LINKED"; statusEl.style.color="var(--dim2)"; log("⚡ port opened @ 115200 baud","sys"); const reader=port.readable.getReader(), dec=new TextDecoder(); (async()=>{ try{ while(true){ const {value,done}=await reader.read(); if(done)break; if(value) log("< "+dec.decode(value).trim(),"rx"); } }catch{} })(); }catch(e){ log("! "+e.message,"err"); } }
+      $("#serialConnect").onclick=connect; $("#serialClear").onclick=()=>logEl.innerHTML="";
+      $("#serialSend").onclick=()=>{ const i=$("#serialCmd"); send(i.value); i.value=""; };
+      $("#serialCmd").addEventListener("keydown",e=>{ if(e.key==="Enter"){ send(e.target.value); e.target.value=""; } });
+      $("#serialDemo").onclick=(e)=>{ if(demoTimer){ clearInterval(demoTimer); demoTimer=null; e.target.textContent="▶ Demo Stream"; return; } e.target.textContent="⏸ Stop Demo"; const s=["TELEMETRY v=3.30 i=0.42A","SENSOR temp=41.2C","HEARTBEAT seq="+(Math.random()*9999|0),"RX packet 0x"+(Math.random()*65535|0).toString(16),"LFSR ks=0b"+(Math.random()*255|0).toString(2)]; demoTimer=setInterval(()=>log("< "+s[Math.random()*s.length|0],"rx"),900); };
+    })();
+
+    /* ================= BOOT LOG + INTERACTIVE TERM ================= */
+    (function(){
+      const logEl=$("#bootLog"), input=$("#termInput");
+      const boot=[ "<span class='cm'>[    0.000]</span> blackbox core online","<span class='cm'>[    0.014]</span> loading 1-bit ISA .............. <span class='hl'>OK</span>","<span class='cm'>[    0.041]</span> mounting signal scope .......... <span class='hl'>OK</span>","<span class='cm'>[    0.070]</span> init LFSR keystream ............ <span class='hl'>OK</span>","<span class='cm'>[    0.088]</span> arming security module ......... <span class='warn'>ARMED</span>","<span class='cm'>[    0.132]</span> detecting modules .............. <span class='hl'>3 LIVE / 3 PENDING</span>","<span class='cm'>[    0.170]</span> CPU SIMULATOR ready","<span class='cm'>#</span> awaiting operator input <span class='cur'>&nbsp;</span>" ];
+      let bi=0; function line(h){ const d=document.createElement("div"); d.innerHTML=h; logEl.appendChild(d); logEl.scrollTop=logEl.scrollHeight; }
+      (function step(){ if(bi<boot.length){ line(boot[bi]); bi++; setTimeout(step,380); } })();
+      const CMDS={ help:()=>"commands: <span class='hl'>help, whoami, ls, modules, cpu, lfsr, verilog, serial, matrix, clear, sudo</span>", whoami:()=>"operator :: clearance <span class='hl'>LEVEL-3</span> :: access GRANTED", ls:()=>"cpu2.1.html  index.html  start.html  /modules/*  lfsr.v", modules:()=>"[CPU ✓] [SERIAL ✓] [LFSR ✓] [LOGIC-LAB ·] [DECODER ·] [VAULT ·]", cpu:()=>{ setTimeout(()=>location.href="cpu2.1.html",500); return "launching CPU simulator…"; }, lfsr:()=>{ openModal("lfsr"); return "opening LFSR cipher window ▣"; }, verilog:()=>{ openModal("lfsr"); setTimeout(()=>$("#lfsrVerilog").click(),300); return "generating Verilog…"; }, serial:()=>{ openModal("serial"); return "opening serial console window ▣"; }, matrix:()=>{ const m=$("#matrix"); m.style.opacity=m.style.opacity==="0.35"?"0.10":"0.35"; return "rain density toggled"; }, clear:()=>{ logEl.innerHTML=""; return null; }, sudo:()=>"<span class='warn'>nice try, operator. the box does not grant root — you earn it.</span>" };
+      input.addEventListener("keydown",e=>{ if(e.key!=="Enter")return; const raw=e.target.value.trim(); e.target.value=""; if(!raw)return; line("<span class='hl'>blackbox#</span> "+raw); const fn=CMDS[raw.toLowerCase().split(" ")[0]]; const r=fn?fn():("<span class='warn'>command not found: "+raw+"</span> — try 'help'"); if(r)line(r); });
+    })();
+
+    /* ---- smooth scroll ---- */
+    document.querySelectorAll('a[href^="#"]').forEach(a=>{ a.addEventListener("click",e=>{ const id=a.getAttribute("href").slice(1); if(!id)return; const el=document.getElementById(id); if(el){ e.preventDefault(); el.scrollIntoView({behavior:"smooth",block:"start"}); } }); });
+  </script>
+</body>
+</html>
