@@ -239,7 +239,7 @@
         <h2>Build. Code.<br/>Solve the box.<span class="cursor" id="heroCur">&nbsp;</span></h2>
         <p class="lead" id="leadText"></p>
         <div class="cta">
-          <a class="btn" href="cpu2.1.html"><svg viewBox="0 0 24 24"><use href="#i-play"/></svg> Launch CPU Simulator</a>
+          <a class="btn" href="cpu.html"><svg viewBox="0 0 24 24"><use href="#i-play"/></svg> Launch CPU Simulator</a>
           <a class="btn secondary" data-open="lfsr" style="cursor:pointer"><svg viewBox="0 0 24 24"><use href="#i-lock"/></svg> Open LFSR Lab</a>
         </div>
       </div>
@@ -259,7 +259,7 @@
     <!-- MODULES -->
     <div class="sectionTitle" id="modules">Modules & Tools</div>
     <div class="modules">
-      <a class="module" href="cpu2.1.html">
+      <a class="module" href="cpu.html">
         <div class="badge"><svg class="icn"><use href="#i-chip"/></svg></div>
         <div class="mbody"><div class="mtitle">CPU Simulator <span class="mstatus live">LIVE</span></div><div class="mdesc">Program a 1-bit black-box CPU in a custom assembly language and watch A, B → OUT on a real-time waveform scope.</div></div>
         <div class="arrow">→</div>
@@ -589,7 +589,7 @@
       const boot=[ "<span class='cm'>[    0.000]</span> blackbox core online","<span class='cm'>[    0.014]</span> loading 1-bit ISA .............. <span class='hl'>OK</span>","<span class='cm'>[    0.041]</span> mounting signal scope .......... <span class='hl'>OK</span>","<span class='cm'>[    0.070]</span> init LFSR keystream ............ <span class='hl'>OK</span>","<span class='cm'>[    0.088]</span> arming security module ......... <span class='warn'>ARMED</span>","<span class='cm'>[    0.132]</span> detecting modules .............. <span class='hl'>3 LIVE / 3 PENDING</span>","<span class='cm'>[    0.170]</span> CPU SIMULATOR ready","<span class='cm'>#</span> awaiting operator input <span class='cur'>&nbsp;</span>" ];
       let bi=0; function line(h){ const d=document.createElement("div"); d.innerHTML=h; logEl.appendChild(d); logEl.scrollTop=logEl.scrollHeight; }
       (function step(){ if(bi<boot.length){ line(boot[bi]); bi++; setTimeout(step,380); } })();
-      const CMDS={ help:()=>"commands: <span class='hl'>help, whoami, ls, modules, cpu, lfsr, verilog, serial, matrix, clear, sudo</span>", whoami:()=>"operator :: clearance <span class='hl'>LEVEL-3</span> :: access GRANTED", ls:()=>"cpu2.1.html  index.html  start.html  /modules/*  lfsr.v", modules:()=>"[CPU ✓] [SERIAL ✓] [LFSR ✓] [LOGIC-LAB ·] [DECODER ·] [VAULT ·]", cpu:()=>{ setTimeout(()=>location.href="cpu2.1.html",500); return "launching CPU simulator…"; }, lfsr:()=>{ openModal("lfsr"); return "opening LFSR cipher window ▣"; }, verilog:()=>{ openModal("lfsr"); setTimeout(()=>$("#lfsrVerilog").click(),300); return "generating Verilog…"; }, serial:()=>{ openModal("serial"); return "opening serial console window ▣"; }, matrix:()=>{ const m=$("#matrix"); m.style.opacity=m.style.opacity==="0.35"?"0.10":"0.35"; return "rain density toggled"; }, clear:()=>{ logEl.innerHTML=""; return null; }, sudo:()=>"<span class='warn'>nice try, operator. the box does not grant root — you earn it.</span>" };
+      const CMDS={ help:()=>"commands: <span class='hl'>help, whoami, ls, modules, cpu, lfsr, verilog, serial, matrix, clear, sudo</span>", whoami:()=>"operator :: clearance <span class='hl'>LEVEL-3</span> :: access GRANTED", ls:()=>"cpu.html  index.html  start.html  /modules/*  lfsr.v", modules:()=>"[CPU ✓] [SERIAL ✓] [LFSR ✓] [LOGIC-LAB ·] [DECODER ·] [VAULT ·]", cpu:()=>{ setTimeout(()=>location.href="cpu.html",500); return "launching CPU simulator…"; }, lfsr:()=>{ openModal("lfsr"); return "opening LFSR cipher window ▣"; }, verilog:()=>{ openModal("lfsr"); setTimeout(()=>$("#lfsrVerilog").click(),300); return "generating Verilog…"; }, serial:()=>{ openModal("serial"); return "opening serial console window ▣"; }, matrix:()=>{ const m=$("#matrix"); m.style.opacity=m.style.opacity==="0.35"?"0.10":"0.35"; return "rain density toggled"; }, clear:()=>{ logEl.innerHTML=""; return null; }, sudo:()=>"<span class='warn'>nice try, operator. the box does not grant root — you earn it.</span>" };
       input.addEventListener("keydown",e=>{ if(e.key!=="Enter")return; const raw=e.target.value.trim(); e.target.value=""; if(!raw)return; line("<span class='hl'>blackbox#</span> "+raw); const fn=CMDS[raw.toLowerCase().split(" ")[0]]; const r=fn?fn():("<span class='warn'>command not found: "+raw+"</span> — try 'help'"); if(r)line(r); });
     })();
 
